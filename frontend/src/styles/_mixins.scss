@@ -1,0 +1,256 @@
+// ============================================
+// Souqly - SCSS Mixins
+// ============================================
+
+@use 'variables' as *;
+
+// ----- Responsive -----
+@mixin respond($breakpoint) {
+    @if $breakpoint =='xs' {
+        @media (max-width: $bp-xs) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='sm' {
+        @media (max-width: $bp-sm) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='md' {
+        @media (max-width: $bp-md) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='lg' {
+        @media (max-width: $bp-lg) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='xl' {
+        @media (max-width: $bp-xl) {
+            @content;
+        }
+    }
+}
+
+@mixin respond-min($breakpoint) {
+    @if $breakpoint =='sm' {
+        @media (min-width: $bp-sm) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='md' {
+        @media (min-width: $bp-md) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='lg' {
+        @media (min-width: $bp-lg) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint =='xl' {
+        @media (min-width: $bp-xl) {
+            @content;
+        }
+    }
+}
+
+// ----- Flexbox -----
+@mixin flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@mixin flex-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+@mixin flex-column {
+    display: flex;
+    flex-direction: column;
+}
+
+@mixin flex-column-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+// ----- Grid -----
+@mixin grid($cols: 1, $gap: $space-4) {
+    display: grid;
+    grid-template-columns: repeat($cols, 1fr);
+    gap: $gap;
+}
+
+// ----- Typography -----
+@mixin heading($size: $font-size-2xl) {
+    font-size: $size;
+    font-weight: $font-weight-bold;
+    line-height: $line-height-tight;
+}
+
+@mixin text-truncate($lines: 1) {
+    @if $lines ==1 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    @else {
+        display: -webkit-box;
+        -webkit-line-clamp: $lines;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+// ----- Transitions -----
+@mixin transition($props: all, $duration: $transition-base) {
+    transition: $props $duration;
+}
+
+// ----- Shadows -----
+@mixin shadow($level: 'md') {
+    @if $level =='xs' {
+        box-shadow: $shadow-xs;
+    }
+
+    @else if $level =='sm' {
+        box-shadow: $shadow-sm;
+    }
+
+    @else if $level =='md' {
+        box-shadow: $shadow-md;
+    }
+
+    @else if $level =='lg' {
+        box-shadow: $shadow-lg;
+    }
+
+    @else if $level =='xl' {
+        box-shadow: $shadow-xl;
+    }
+}
+
+// ----- Card -----
+@mixin card($padding: $space-4) {
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    padding: $padding;
+    @include shadow('sm');
+    @include transition(box-shadow);
+
+    &:hover {
+        @include shadow('md');
+    }
+}
+
+// ----- Button Base -----
+@mixin button-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: $space-2;
+    font-weight: $font-weight-medium;
+    border: none;
+    border-radius: $radius-md;
+    cursor: pointer;
+    @include transition;
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+// ----- RTL-aware spacing -----
+@mixin margin-start($value) {
+    [dir='ltr'] & {
+        margin-left: $value;
+    }
+
+    [dir='rtl'] & {
+        margin-right: $value;
+    }
+}
+
+@mixin margin-end($value) {
+    [dir='ltr'] & {
+        margin-right: $value;
+    }
+
+    [dir='rtl'] & {
+        margin-left: $value;
+    }
+}
+
+@mixin padding-start($value) {
+    [dir='ltr'] & {
+        padding-left: $value;
+    }
+
+    [dir='rtl'] & {
+        padding-right: $value;
+    }
+}
+
+@mixin padding-end($value) {
+    [dir='ltr'] & {
+        padding-right: $value;
+    }
+
+    [dir='rtl'] & {
+        padding-left: $value;
+    }
+}
+
+// ----- Focus styles (accessibility) -----
+@mixin focus-ring {
+    &:focus-visible {
+        outline: 2px solid $color-accent;
+        outline-offset: 2px;
+    }
+}
+
+// ----- Scrollbar -----
+@mixin custom-scrollbar {
+    &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: $color-text-light;
+        border-radius: $radius-full;
+    }
+}
+
+// ----- Hide visually (a11y) -----
+@mixin visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

@@ -1,0 +1,15 @@
+{
+  "common": {
+    "appName": "سوقلي",
+    "loading": "جارٍ التحميل...",
+    "tagline": "سوقك الإلكتروني في الشرق الأوسط",
+    "switchToEnglish": "EN",
+    "switchToArabic": "عربي"
+  },
+  "nav": {
+    "language": "اللغة"
+  },
+  "footer": {
+    "copyright": "© {{year}} سوقلي. جميع الحقوق محفوظة."
+  }
+}

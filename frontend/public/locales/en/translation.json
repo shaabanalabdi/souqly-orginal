@@ -1,0 +1,15 @@
+{
+  "common": {
+    "appName": "Souqly",
+    "loading": "Loading...",
+    "tagline": "Your Middle East Marketplace",
+    "switchToEnglish": "EN",
+    "switchToArabic": "AR"
+  },
+  "nav": {
+    "language": "Language"
+  },
+  "footer": {
+    "copyright": "© {{year}} Souqly. All rights reserved."
+  }
+}

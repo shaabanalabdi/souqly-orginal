@@ -1,0 +1,875 @@
+// FILE: backend/prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextIndex"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════
+
+enum TrustTier {
+  NEW
+  VERIFIED
+  TRUSTED
+  TOP_SELLER
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum AccountType {
+  INDIVIDUAL
+  STORE
+  CRAFTSMAN
+}
+
+enum StaffRole {
+  NONE
+  MODERATOR
+  ADMIN
+}
+
+enum IdentityVerificationStatus {
+  NONE
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ListingStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SOLD
+  EXPIRED
+  DELETED
+}
+
+enum Condition {
+  NEW
+  USED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  OFFER
+  PHONE_REQUEST
+  SYSTEM
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTERED
+}
+
+enum DealStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum EscrowStatus {
+  NONE
+  HELD
+  RELEASED
+  REFUNDED
+}
+
+enum EscrowWebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+enum DeliveryMethod {
+  PICKUP
+  COURIER
+}
+
+enum ReportReason {
+  FRAUD
+  INAPPROPRIATE
+  DUPLICATE
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+enum AttributeType {
+  TEXT
+  NUMBER
+  SELECT
+  MULTISELECT
+  BOOLEAN
+  DATE
+}
+
+enum InvoiceType {
+  PROFORMA
+  TAX
+}
+
+enum RFQStatus {
+  OPEN
+  QUOTED
+  CLOSED
+}
+
+enum StoreSubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+// ═══════════════════════════════════════
+// USERS & AUTH
+// ═══════════════════════════════════════
+
+model User {
+  id              Int        @id @default(autoincrement())
+  email           String?    @unique
+  phone           String?    @unique
+  passwordHash    String?
+  googleId        String?    @unique
+  facebookId      String?    @unique
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  trustTier       TrustTier  @default(NEW)
+  trustScore      Int        @default(0)
+  role            Role       @default(USER)
+  accountType     AccountType @default(INDIVIDUAL)
+  staffRole       StaffRole   @default(NONE)
+  identityVerificationStatus IdentityVerificationStatus @default(NONE)
+  identityVerifiedAt DateTime?
+  isActive        Boolean    @default(true)
+  bannedAt        DateTime?
+  bannedReason    String?
+  lastLoginAt     DateTime?
+  avgResponseHours Float?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  profile         Profile?
+  listings        Listing[]
+  businessProfile BusinessProfile?
+  craftsmanProfile CraftsmanProfile?
+  storeSubscription StoreSubscription?
+  buyerThreads    ChatThread[]  @relation("BuyerThreads")
+  sellerThreads   ChatThread[]  @relation("SellerThreads")
+  sentMessages    ChatMessage[]
+  buyerDeals      Deal[]        @relation("BuyerDeals")
+  sellerDeals     Deal[]        @relation("SellerDeals")
+  reviewsGiven    Review[]      @relation("ReviewsGiven")
+  reviewsReceived Review[]      @relation("ReviewsReceived")
+  reports         Report[]
+  favorites       Favorite[]
+  savedSearches   SavedSearch[]
+  identityVerificationRequests IdentityVerificationRequest[] @relation("IdentityVerificationOwner")
+  identityVerificationReviews IdentityVerificationRequest[] @relation("IdentityVerificationReviewer")
+
+  @@index([email])
+  @@index([phone])
+  @@index([trustTier])
+  @@index([role])
+  @@index([accountType])
+  @@index([staffRole])
+  @@index([identityVerificationStatus])
+  @@map("users")
+}
+
+model Profile {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  fullName  String   @db.VarChar(100)
+  username  String?  @unique @db.VarChar(50)
+  bio       String?  @db.Text
+  avatarUrl String?  @db.VarChar(500)
+  countryId Int?
+  cityId    Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  country Country? @relation(fields: [countryId], references: [id])
+  city    City?    @relation(fields: [cityId], references: [id])
+
+  @@map("profiles")
+}
+
+// ═══════════════════════════════════════
+// GEO
+// ═══════════════════════════════════════
+
+model Country {
+  id             Int       @id @default(autoincrement())
+  nameAr         String    @db.VarChar(100)
+  nameEn         String    @db.VarChar(100)
+  code           String    @unique @db.VarChar(5)
+  currencyCode   String    @db.VarChar(5)
+  currencySymbol String    @db.VarChar(10)
+  phoneCode      String    @db.VarChar(10)
+  sortOrder      Int       @default(0)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  cities   City[]
+  profiles Profile[]
+  listings Listing[]
+
+  @@map("countries")
+}
+
+model City {
+  id        Int      @id @default(autoincrement())
+  countryId Int
+  nameAr    String   @db.VarChar(100)
+  nameEn    String   @db.VarChar(100)
+  latitude  Float
+  longitude Float
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  country  Country   @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  profiles Profile[]
+  listings Listing[]
+
+  @@index([countryId])
+  @@map("cities")
+}
+
+// ═══════════════════════════════════════
+// CATEGORIES & ATTRIBUTES
+// ═══════════════════════════════════════
+
+model Category {
+  id            Int           @id @default(autoincrement())
+  nameAr        String        @db.VarChar(100)
+  nameEn        String        @db.VarChar(100)
+  slug          String        @unique @db.VarChar(100)
+  icon          String        @db.VarChar(20)
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+
+  subcategories Subcategory[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id         Int                   @id @default(autoincrement())
+  categoryId Int
+  nameAr     String                @db.VarChar(100)
+  nameEn     String                @db.VarChar(100)
+  slug       String                @unique @db.VarChar(100)
+  sortOrder  Int                   @default(0)
+  isActive   Boolean               @default(true)
+  createdAt  DateTime              @default(now())
+
+  category   Category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attributes AttributeDefinition[]
+  listings   Listing[]
+
+  @@index([categoryId])
+  @@map("subcategories")
+}
+
+model AttributeDefinition {
+  id            Int           @id @default(autoincrement())
+  subcategoryId Int
+  nameAr        String        @db.VarChar(100)
+  nameEn        String        @db.VarChar(100)
+  slug          String        @db.VarChar(100)
+  type          AttributeType @default(TEXT)
+  options       Json?
+  isRequired    Boolean       @default(false)
+  isFilterable  Boolean       @default(false)
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+
+  subcategory Subcategory            @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  values      ListingAttributeValue[]
+
+  @@index([subcategoryId])
+  @@map("attribute_definitions")
+}
+
+// ═══════════════════════════════════════
+// LISTINGS
+// ═══════════════════════════════════════
+
+model Listing {
+  id                 Int           @id @default(autoincrement())
+  userId             Int
+  subcategoryId      Int
+  countryId          Int
+  cityId             Int
+  titleAr            String        @db.VarChar(200)
+  titleEn            String?       @db.VarChar(200)
+  descriptionAr      String        @db.Text
+  descriptionEn      String?       @db.Text
+  priceAmount        Float?
+  currency           String?       @db.VarChar(5)
+  negotiable         Boolean       @default(true)
+  condition          Condition?
+  deliveryAvailable  Boolean       @default(false)
+  countryOfOrigin    String?       @db.VarChar(100)
+  moqText            String?       @db.VarChar(200)
+  moqMinQty          Int?
+  moqUnit            String?       @db.VarChar(50)
+  locationLat        Float?
+  locationLng        Float?
+  phoneVisibility    Boolean       @default(false)
+  whatsappVisibility Boolean       @default(false)
+  status             ListingStatus @default(PENDING)
+  featuredUntil      DateTime?
+  viewCount          Int           @default(0)
+  favoriteCount      Int           @default(0)
+  expiresAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user            User                    @relation(fields: [userId], references: [id])
+  subcategory     Subcategory             @relation(fields: [subcategoryId], references: [id])
+  country         Country                 @relation(fields: [countryId], references: [id])
+  city            City                    @relation(fields: [cityId], references: [id])
+  images          ListingImage[]
+  attributeValues ListingAttributeValue[]
+  chatThreads     ChatThread[]
+  offers          Offer[]
+  deals           Deal[]
+  favorites       Favorite[]
+  reports         Report[]
+
+  @@index([userId])
+  @@index([subcategoryId])
+  @@index([countryId])
+  @@index([cityId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([priceAmount])
+  @@fulltext([titleAr, descriptionAr])
+  @@map("listings")
+}
+
+model ListingImage {
+  id          Int     @id @default(autoincrement())
+  listingId   Int
+  urlOriginal String  @db.VarChar(500)
+  urlMedium   String  @db.VarChar(500)
+  urlThumb    String  @db.VarChar(500)
+  urlMini     String  @db.VarChar(500)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@map("listing_images")
+}
+
+model ListingAttributeValue {
+  id                    Int                 @id @default(autoincrement())
+  listingId             Int
+  attributeDefinitionId Int
+  value                 String              @db.Text
+  createdAt             DateTime            @default(now())
+
+  listing   Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  attribute AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, attributeDefinitionId])
+  @@index([listingId])
+  @@index([attributeDefinitionId])
+  @@map("listing_attribute_values")
+}
+
+// ═══════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════
+
+model ChatThread {
+  id            Int           @id @default(autoincrement())
+  listingId     Int
+  buyerId       Int
+  sellerId      Int
+  lastMessageAt DateTime?
+  createdAt     DateTime      @default(now())
+
+  listing  Listing       @relation(fields: [listingId], references: [id])
+  buyer    User          @relation("BuyerThreads", fields: [buyerId], references: [id])
+  seller   User          @relation("SellerThreads", fields: [sellerId], references: [id])
+  messages ChatMessage[]
+  offers   Offer[]
+
+  @@unique([listingId, buyerId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([lastMessageAt])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id        Int         @id @default(autoincrement())
+  threadId  Int
+  senderId  Int
+  type      MessageType @default(TEXT)
+  content   String      @db.Text
+  imageUrl  String?     @db.VarChar(500)
+  isRead    Boolean     @default(false)
+  readAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User       @relation(fields: [senderId], references: [id])
+
+  @@index([threadId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+// ═══════════════════════════════════════
+// OFFERS & DEALS
+// ═══════════════════════════════════════
+
+model Offer {
+  id            Int         @id @default(autoincrement())
+  threadId      Int
+  senderId      Int
+  listingId     Int
+  amount        Float
+  quantity      Int         @default(1)
+  message       String?     @db.Text
+  status        OfferStatus @default(PENDING)
+  counterAmount Float?
+  createdAt     DateTime    @default(now())
+  respondedAt   DateTime?
+
+  thread  ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  listing Listing    @relation(fields: [listingId], references: [id])
+
+  @@index([threadId])
+  @@index([listingId])
+  @@map("offers")
+}
+
+model Deal {
+  id              Int            @id @default(autoincrement())
+  listingId       Int
+  buyerId         Int
+  sellerId        Int
+  finalPrice      Float
+  quantity        Int            @default(1)
+  currency        String         @db.VarChar(5)
+  escrowStatus    EscrowStatus   @default(NONE)
+  escrowAmount    Float?
+  escrowCurrency  String?        @db.VarChar(5)
+  escrowProviderRef String?      @db.VarChar(120)
+  escrowHeldAt    DateTime?
+  escrowReleasedAt DateTime?
+  escrowRefundedAt DateTime?
+  meetingPlace    String?        @db.VarChar(300)
+  meetingLat      Float?
+  meetingLng      Float?
+  meetingTime     DateTime?
+  deliveryMethod  DeliveryMethod @default(PICKUP)
+  courierName     String?        @db.VarChar(100)
+  trackingNumber  String?        @db.VarChar(100)
+  buyerConfirmed  Boolean        @default(false)
+  sellerConfirmed Boolean        @default(false)
+  status          DealStatus     @default(PENDING)
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  listing  Listing        @relation(fields: [listingId], references: [id])
+  buyer    User           @relation("BuyerDeals", fields: [buyerId], references: [id])
+  seller   User           @relation("SellerDeals", fields: [sellerId], references: [id])
+  reviews  Review[]
+  dispute  DisputeCase?
+  shipment Shipment?
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([escrowStatus])
+  @@map("deals")
+}
+
+model EscrowWebhookEvent {
+  id             Int                      @id @default(autoincrement())
+  eventId        String                   @unique @db.VarChar(120)
+  eventType      String                   @db.VarChar(80)
+  dealId         Int?
+  providerRef    String?                  @db.VarChar(120)
+  payload        Json
+  status         EscrowWebhookEventStatus @default(RECEIVED)
+  processedAt    DateTime?
+  failureCode    String?                  @db.VarChar(120)
+  failureMessage String?                  @db.Text
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+  @@index([dealId])
+  @@index([providerRef])
+  @@map("escrow_webhook_events")
+}
+
+// ═══════════════════════════════════════
+// REVIEWS
+// ═══════════════════════════════════════
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  reviewerId Int
+  revieweeId Int
+  dealId     Int
+  rating     Int      // 1-5
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  reviewer User @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewee User @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  deal     Deal @relation(fields: [dealId], references: [id])
+
+  @@unique([dealId, reviewerId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+// ═══════════════════════════════════════
+// REPORTS & MODERATION
+// ═══════════════════════════════════════
+
+model Report {
+  id              Int          @id @default(autoincrement())
+  reporterId      Int
+  listingId       Int?
+  reportableType  String       @db.VarChar(50)
+  reportableId    Int
+  reason          ReportReason
+  description     String?      @db.Text
+  status          ReportStatus @default(PENDING)
+  resolvedByAdmin Int?
+  resolvedAt      DateTime?
+  resolution      String?      @db.Text
+  createdAt       DateTime     @default(now())
+
+  reporter User     @relation(fields: [reporterId], references: [id])
+  listing  Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  @@index([reporterId])
+  @@index([listingId])
+  @@index([reportableType, reportableId])
+  @@index([status])
+  @@map("reports")
+}
+
+model DisputeCase {
+  id              Int           @id @default(autoincrement())
+  dealId          Int           @unique
+  openedByUserId  Int
+  reason          String        @db.VarChar(200)
+  description     String        @db.Text
+  status          DisputeStatus @default(OPEN)
+  resolvedByAdmin Int?
+  resolution      String?       @db.Text
+  createdAt       DateTime      @default(now())
+  resolvedAt      DateTime?
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@index([status])
+  @@map("dispute_cases")
+}
+
+model IdentityVerificationRequest {
+  id                   Int                        @id @default(autoincrement())
+  userId               Int
+  status               IdentityVerificationStatus @default(PENDING)
+  documentType         String                     @db.VarChar(50)
+  documentNumberMasked String?                    @db.VarChar(50)
+  documentFrontUrl     String?                    @db.VarChar(500)
+  documentBackUrl      String?                    @db.VarChar(500)
+  selfieUrl            String?                    @db.VarChar(500)
+  note                 String?                    @db.Text
+  submittedAt          DateTime                   @default(now())
+  reviewedAt           DateTime?
+  reviewerId           Int?
+  reviewerNote         String?                    @db.Text
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  user     User  @relation("IdentityVerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("IdentityVerificationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([status, submittedAt])
+  @@index([reviewerId])
+  @@map("identity_verification_requests")
+}
+
+// ═══════════════════════════════════════
+// FAVORITES & SAVED SEARCHES
+// ═══════════════════════════════════════
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  listingId Int
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+model SavedSearch {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String   @db.VarChar(200)
+  filters   Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+// ═══════════════════════════════════════
+// B2B
+// ═══════════════════════════════════════
+
+model BusinessProfile {
+  id                 Int       @id @default(autoincrement())
+  userId             Int       @unique
+  companyName        String    @db.VarChar(200)
+  commercialRegister String?   @db.VarChar(100)
+  taxNumber          String?   @db.VarChar(100)
+  website            String?   @db.VarChar(300)
+  verifiedByAdmin    Boolean   @default(false)
+  verifiedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  catalogs Catalog[]
+  rfqsReceived RFQ[]
+
+  @@map("business_profiles")
+}
+
+model CraftsmanProfile {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @unique
+  profession       String    @db.VarChar(120)
+  experienceYears  Int?
+  workingHours     String?   @db.VarChar(255)
+  workingAreas     Json?
+  portfolio        Json?
+  availableNow     Boolean   @default(false)
+  verifiedByAdmin  Boolean   @default(false)
+  verifiedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("craftsman_profiles")
+}
+
+model Catalog {
+  id                Int             @id @default(autoincrement())
+  businessProfileId Int
+  name              String          @db.VarChar(200)
+  description       String?         @db.Text
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+
+  businessProfile BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  items           CatalogItem[]
+
+  @@index([businessProfileId])
+  @@map("catalogs")
+}
+
+model CatalogItem {
+  id          Int         @id @default(autoincrement())
+  catalogId   Int
+  sku         String      @db.VarChar(100)
+  name        String      @db.VarChar(200)
+  description String?     @db.Text
+  price       Float
+  currency    String      @db.VarChar(5)
+  moq         Int         @default(1)
+  unit        String      @default("قطعة") @db.VarChar(50)
+  stock       Int         @default(0)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  catalog    Catalog     @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  priceTiers PriceTier[]
+  rfqs       RFQ[]
+
+  @@index([catalogId])
+  @@map("catalog_items")
+}
+
+model PriceTier {
+  id            Int         @id @default(autoincrement())
+  catalogItemId Int
+  minQuantity   Int
+  unitPrice     Float
+  createdAt     DateTime    @default(now())
+
+  catalogItem CatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId])
+  @@map("price_tiers")
+}
+
+model RFQ {
+  id                Int             @id @default(autoincrement())
+  buyerId           Int
+  catalogItemId     Int
+  businessProfileId Int
+  quantity          Int
+  requirements      String?         @db.Text
+  status            RFQStatus       @default(OPEN)
+  createdAt         DateTime        @default(now())
+
+  catalogItem     CatalogItem     @relation(fields: [catalogItemId], references: [id])
+  businessProfile BusinessProfile @relation(fields: [businessProfileId], references: [id])
+  quotes          Quote[]
+
+  @@index([buyerId])
+  @@index([businessProfileId])
+  @@map("rfqs")
+}
+
+model Quote {
+  id        Int         @id @default(autoincrement())
+  rfqId     Int
+  sellerId  Int
+  price     Float
+  message   String?     @db.Text
+  status    OfferStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+
+  rfq     RFQ              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  invoice ProformaInvoice?
+
+  @@index([rfqId])
+  @@map("quotes")
+}
+
+model ProformaInvoice {
+  id            Int         @id @default(autoincrement())
+  quoteId       Int         @unique
+  dealId        Int?
+  invoiceNumber String      @unique @db.VarChar(100)
+  amount        Float
+  taxDetails    String?     @db.Text
+  pdfUrl        String?     @db.VarChar(500)
+  type          InvoiceType @default(PROFORMA)
+  issuedAt      DateTime    @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id])
+
+  @@map("proforma_invoices")
+}
+
+// ═══════════════════════════════════════
+// SHIPMENT
+// ═══════════════════════════════════════
+
+model Shipment {
+  id             Int       @id @default(autoincrement())
+  dealId         Int       @unique
+  courier        String    @db.VarChar(100)
+  trackingNumber String    @db.VarChar(200)
+  status         String    @default("PENDING") @db.VarChar(50)
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@map("shipments")
+}
+
+// ═══════════════════════════════════════
+// AUDIT
+// ═══════════════════════════════════════
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int
+  action     String   @db.VarChar(200)
+  entityType String   @db.VarChar(100)
+  entityId   Int
+  oldData    Json?
+  newData    Json?
+  ipAddress  String?  @db.VarChar(50)
+  createdAt  DateTime @default(now())
+
+  @@index([adminId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════
+// STORE SUBSCRIPTIONS
+// ═══════════════════════════════════════
+
+model StoreSubscription {
+  id        Int                     @id @default(autoincrement())
+  userId    Int                     @unique
+  planCode  String                  @db.VarChar(50)
+  planName  String                  @db.VarChar(100)
+  status    StoreSubscriptionStatus @default(ACTIVE)
+  startedAt DateTime                @default(now())
+  expiresAt DateTime
+  autoRenew Boolean                 @default(false)
+  priceUsd  Float
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("store_subscriptions")
+}
