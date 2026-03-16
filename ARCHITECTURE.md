@@ -1,4 +1,4 @@
-# Souqly Architecture
+# Souqly Architecture v1
 
 Souqly follows a modular monolith architecture:
 
