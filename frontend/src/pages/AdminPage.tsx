@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { adminService } from '../services/admin.service';
 import { asHttpError } from '../services/http';
@@ -71,6 +72,7 @@ function formatDurationMs(durationMs: number): string {
 }
 
 export function AdminPage() {
+  const { t } = useTranslation('admin');
   const staffRole = useAuthStore((state) => state.user?.staffRole);
   const isAdmin = staffRole === 'ADMIN';
 
@@ -466,44 +468,40 @@ export function AdminPage() {
 
   return (
     <div className="stack">
-      <h1 className="page-title">Admin Console</h1>
-      <p className="page-subtitle">
-        Dashboard, moderation queue, listing moderation, and user controls.
-      </p>
+      <h1 className="page-title">{t('title')}</h1>
+      <p className="page-subtitle">{t('subtitle')}</p>
 
       {error ? <p className="error-text">{error}</p> : null}
       {message ? <p className="muted-text">{message}</p> : null}
 
       <section className="card">
         <div className="card__header">
-          <h2>Dashboard</h2>
-          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>
-            Refresh
-          </button>
+          <h2>{t('dashboard')}</h2>
+          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>{t('refresh')}</button>
         </div>
         {dashboard ? (
           <div className="grid grid--2">
             <div className="row">
-              <div className="row__title">Users</div>
+              <div className="row__title">{t('users')}</div>
               <div className="row__meta">
                 Total: {dashboard.users.total} • Active: {dashboard.users.active} • Banned: {dashboard.users.banned}
               </div>
             </div>
             <div className="row">
-              <div className="row__title">Listings</div>
+              <div className="row__title">{t('listings')}</div>
               <div className="row__meta">
                 Total: {dashboard.listings.total} • Active: {dashboard.listings.active} • Pending:{' '}
                 {dashboard.listings.pending} • Rejected: {dashboard.listings.rejected}
               </div>
             </div>
             <div className="row">
-              <div className="row__title">Reports</div>
+              <div className="row__title">{t('reports')}</div>
               <div className="row__meta">
                 Total: {dashboard.reports.total} • Pending: {dashboard.reports.pending}
               </div>
             </div>
             <div className="row">
-              <div className="row__title">Deals</div>
+              <div className="row__title">{t('deals')}</div>
               <div className="row__meta">
                 Total: {dashboard.deals.total} • Completed: {dashboard.deals.completed}
               </div>
@@ -516,28 +514,26 @@ export function AdminPage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>Saved Search Digests</h2>
-          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>
-            Refresh
-          </button>
+          <h2>{t('savedSearchDigests')}</h2>
+          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>{t('refresh')}</button>
         </div>
         {digestStatus ? (
           <div className="grid grid--2">
             <div className="row">
-              <div className="row__title">Scheduler</div>
+              <div className="row__title">{t('scheduler')}</div>
               <div className="row__meta">
                 Enabled: {digestStatus.enabled ? 'Yes' : 'No'} • Check interval: {Math.round(digestStatus.checkIntervalMs / 60000)} min
               </div>
             </div>
             <div className="row">
-              <div className="row__title">Daily</div>
+              <div className="row__title">{t('daily')}</div>
               <div className="row__meta">
                 Last run: {digestStatus.daily.lastRunAt ? formatDate(digestStatus.daily.lastRunAt) : 'Never'} • Next due:{' '}
                 {formatDate(digestStatus.daily.nextDueAt)} • Locked: {digestStatus.daily.isLocked ? 'Yes' : 'No'}
               </div>
             </div>
             <div className="row">
-              <div className="row__title">Weekly</div>
+              <div className="row__title">{t('weekly')}</div>
               <div className="row__meta">
                 Last run: {digestStatus.weekly.lastRunAt ? formatDate(digestStatus.weekly.lastRunAt) : 'Never'} • Next due:{' '}
                 {formatDate(digestStatus.weekly.nextDueAt)} • Locked: {digestStatus.weekly.isLocked ? 'Yes' : 'No'}
@@ -554,7 +550,7 @@ export function AdminPage() {
             onClick={() => void handleRunDigest('daily')}
             disabled={Boolean(digestRunning)}
           >
-            {digestRunning === 'daily' ? 'Running daily...' : 'Run Daily Digest'}
+            {digestRunning === 'daily' ? 'Running daily...' : t('runDailyDigest')}
           </button>
           <button
             type="button"
@@ -562,7 +558,7 @@ export function AdminPage() {
             onClick={() => void handleRunDigest('weekly')}
             disabled={Boolean(digestRunning)}
           >
-            {digestRunning === 'weekly' ? 'Running weekly...' : 'Run Weekly Digest'}
+            {digestRunning === 'weekly' ? 'Running weekly...' : t('runWeeklyDigest')}
           </button>
           <button
             type="button"
@@ -570,7 +566,7 @@ export function AdminPage() {
             onClick={() => void handleRunDigest('both')}
             disabled={Boolean(digestRunning)}
           >
-            {digestRunning === 'both' ? 'Running both...' : 'Run Both'}
+            {digestRunning === 'both' ? 'Running both...' : t('runBoth')}
           </button>
         </div>
         <div className="grid grid--3" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
@@ -672,9 +668,7 @@ export function AdminPage() {
           </label>
         </div>
         <div className="button-row">
-          <button type="button" className="button button--ghost" onClick={handleExportDigestHistoryCsv}>
-            Export CSV
-          </button>
+          <button type="button" className="button button--ghost" onClick={handleExportDigestHistoryCsv}>{t('exportCsv')}</button>
         </div>
         <div className="table-wrap" style={{ marginTop: '0.85rem' }}>
           <table className="table">
@@ -687,7 +681,7 @@ export function AdminPage() {
                 <th>Notified</th>
                 <th>Emailed</th>
                 <th>Duration</th>
-                <th>Completed</th>
+                <th>{t('completed')}</th>
               </tr>
             </thead>
             <tbody>
@@ -712,7 +706,7 @@ export function AdminPage() {
             Page {digestHistoryMeta.page} / {Math.max(1, digestHistoryMeta.totalPages)} • Total rows: {digestHistoryMeta.total}
           </span>
           <label className="field" style={{ minWidth: '120px' }}>
-            <span className="label">Page size</span>
+            <span className="label">{t('pageSize')}</span>
             <select
               className="select"
               value={digestHistoryLimit}
@@ -734,27 +728,23 @@ export function AdminPage() {
               className="button button--ghost"
               onClick={() => setDigestHistoryPage((prev) => Math.max(1, prev - 1))}
               disabled={loading || !digestHistoryMeta.hasPrev}
-            >
-              Previous
-            </button>
+            >{t('previous')}</button>
             <button
               type="button"
               className="button button--ghost"
               onClick={() => setDigestHistoryPage((prev) => prev + 1)}
               disabled={loading || !digestHistoryMeta.hasNext}
-            >
-              Next
-            </button>
+            >{t('next')}</button>
           </div>
         </div>
       </section>
 
       <section className="grid grid--3">
         <div className="card">
-          <h2>Resolve Report</h2>
+          <h2>{t('resolveReport')}</h2>
           <div className="stack">
             <label className="field">
-              <span className="label">Report ID</span>
+              <span className="label">{t('reportId')}</span>
               <input
                 className="input"
                 type="number"
@@ -764,7 +754,7 @@ export function AdminPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Action</span>
+              <span className="label">{t('action')}</span>
               <select
                 className="select"
                 value={reportAction}
@@ -779,24 +769,22 @@ export function AdminPage() {
               </select>
             </label>
             <label className="field">
-              <span className="label">Resolution note</span>
+              <span className="label">{t('resolutionNote')}</span>
               <input
                 className="input"
                 value={reportResolution}
                 onChange={(event) => setReportResolution(event.target.value)}
               />
             </label>
-            <button type="button" className="button button--danger" onClick={handleResolveReport}>
-              Apply
-            </button>
+            <button type="button" className="button button--danger" onClick={handleResolveReport}>{t('apply')}</button>
           </div>
         </div>
 
         <div className="card">
-          <h2>Moderate Listing</h2>
+          <h2>{t('moderateListing')}</h2>
           <div className="stack">
             <label className="field">
-              <span className="label">Listing ID</span>
+              <span className="label">{t('listingId')}</span>
               <input
                 className="input"
                 type="number"
@@ -806,7 +794,7 @@ export function AdminPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Action</span>
+              <span className="label">{t('action')}</span>
               <select
                 className="select"
                 value={listingAction}
@@ -821,12 +809,10 @@ export function AdminPage() {
               </select>
             </label>
             <label className="field">
-              <span className="label">Reason</span>
+              <span className="label">{t('reason')}</span>
               <input className="input" value={listingReason} onChange={(event) => setListingReason(event.target.value)} />
             </label>
-            <button type="button" className="button button--warning" onClick={handleModerateListing}>
-              Apply
-            </button>
+            <button type="button" className="button button--warning" onClick={handleModerateListing}>{t('apply')}</button>
           </div>
         </div>
 
@@ -834,7 +820,7 @@ export function AdminPage() {
           <h2>Identity Verification</h2>
           <div className="stack">
             <label className="field">
-              <span className="label">Request ID</span>
+              <span className="label">{t('requestId')}</span>
               <input
                 className="input"
                 type="number"
@@ -844,7 +830,7 @@ export function AdminPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Action</span>
+              <span className="label">{t('action')}</span>
               <select
                 className="select"
                 value={identityVerificationAction}
@@ -862,9 +848,7 @@ export function AdminPage() {
                 onChange={(event) => setIdentityVerificationReviewerNote(event.target.value)}
               />
             </label>
-            <button type="button" className="button button--primary" onClick={handleResolveIdentityVerification}>
-              Apply
-            </button>
+            <button type="button" className="button button--primary" onClick={handleResolveIdentityVerification}>{t('apply')}</button>
           </div>
         </div>
       </section>
@@ -874,7 +858,7 @@ export function AdminPage() {
           <h2>Moderate User (Admin only)</h2>
           <div className="grid grid--3">
             <label className="field">
-              <span className="label">User ID</span>
+              <span className="label">{t('userId')}</span>
               <input
                 className="input"
                 type="number"
@@ -884,7 +868,7 @@ export function AdminPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Action</span>
+              <span className="label">{t('action')}</span>
               <select
                 className="select"
                 value={userAction}
@@ -910,7 +894,7 @@ export function AdminPage() {
             </label>
             {userAction === 'set_staff_role' ? (
               <label className="field">
-                <span className="label">Staff Role</span>
+                <span className="label">{t('staffRole')}</span>
                 <select
                   className="select"
                   value={userStaffRole}
@@ -924,7 +908,7 @@ export function AdminPage() {
             ) : null}
             {userAction === 'set_account_type' ? (
               <label className="field">
-                <span className="label">Account Type</span>
+                <span className="label">{t('accountType')}</span>
                 <select
                   className="select"
                   value={userAccountType}
@@ -937,7 +921,7 @@ export function AdminPage() {
               </label>
             ) : null}
             <label className="field">
-              <span className="label">Reason</span>
+              <span className="label">{t('reason')}</span>
               <input className="input" value={userReason} onChange={(event) => setUserReason(event.target.value)} />
             </label>
           </div>
@@ -953,7 +937,7 @@ export function AdminPage() {
         <h2>Featured Listings</h2>
         <div className="grid grid--3">
           <label className="field">
-            <span className="label">Listing ID</span>
+            <span className="label">{t('listingId')}</span>
             <input
               className="input"
               type="number"
@@ -963,7 +947,7 @@ export function AdminPage() {
             />
           </label>
           <label className="field">
-            <span className="label">Days</span>
+            <span className="label">{t('days')}</span>
             <input
               className="input"
               type="number"
@@ -1034,14 +1018,12 @@ export function AdminPage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>Fraud Flags</h2>
-          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>
-            Refresh
-          </button>
+          <h2>{t('fraudFlags')}</h2>
+          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>{t('refresh')}</button>
         </div>
         <div className="grid grid--3" style={{ marginBottom: '0.75rem' }}>
           <label className="field">
-            <span className="label">Listing ID</span>
+            <span className="label">{t('listingId')}</span>
             <input
               className="input"
               type="number"
@@ -1083,14 +1065,12 @@ export function AdminPage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>Blacklist</h2>
-          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>
-            Refresh
-          </button>
+          <h2>{t('blacklist')}</h2>
+          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>{t('refresh')}</button>
         </div>
         <div className="grid grid--3" style={{ marginBottom: '0.75rem' }}>
           <label className="field">
-            <span className="label">Type</span>
+            <span className="label">{t('type')}</span>
             <select
               className="select"
               value={blacklistTypeFilter}
@@ -1103,14 +1083,14 @@ export function AdminPage() {
             </select>
           </label>
           <label className="field">
-            <span className="label">Active</span>
+            <span className="label">{t('active')}</span>
             <select
               className="select"
               value={blacklistActiveFilter}
               onChange={(event) => setBlacklistActiveFilter(event.target.value as BlacklistActiveFilter)}
             >
               <option value="">All</option>
-              <option value="true">Active</option>
+              <option value="true">{t('active')}</option>
               <option value="false">Inactive</option>
             </select>
           </label>
@@ -1139,7 +1119,7 @@ export function AdminPage() {
             </select>
           </label>
           <label className="field">
-            <span className="label">Value</span>
+            <span className="label">{t('value')}</span>
             <input
               className="input"
               value={blacklistCreateValue}
@@ -1148,7 +1128,7 @@ export function AdminPage() {
             />
           </label>
           <label className="field">
-            <span className="label">Reason</span>
+            <span className="label">{t('reason')}</span>
             <input
               className="input"
               value={blacklistCreateReason}
@@ -1167,10 +1147,10 @@ export function AdminPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Type</th>
-                <th>Value</th>
-                <th>Reason</th>
-                <th>Active</th>
+                <th>{t('type')}</th>
+                <th>{t('value')}</th>
+                <th>{t('reason')}</th>
+                <th>{t('active')}</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1228,7 +1208,7 @@ export function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>Status</th>
-                <th>Reason</th>
+                <th>{t('reason')}</th>
                 <th>Target</th>
                 <th>Reporter</th>
                 <th>Listing</th>
@@ -1259,10 +1239,8 @@ export function AdminPage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>Audit Logs</h2>
-          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>
-            Refresh
-          </button>
+          <h2>{t('auditLogs')}</h2>
+          <button type="button" className="button button--secondary" onClick={loadAll} disabled={loading}>{t('refresh')}</button>
         </div>
         <div className="grid grid--3" style={{ marginBottom: '0.75rem' }}>
           <label className="field">
@@ -1300,7 +1278,7 @@ export function AdminPage() {
               <tr>
                 <th>ID</th>
                 <th>Admin</th>
-                <th>Action</th>
+                <th>{t('action')}</th>
                 <th>Entity</th>
                 <th>IP</th>
                 <th>Created</th>
@@ -1327,7 +1305,7 @@ export function AdminPage() {
 
       {isAdmin ? (
         <section className="card">
-          <h2>Users</h2>
+          <h2>{t('users')}</h2>
           <div className="table-wrap">
             <table className="table">
               <thead>
@@ -1336,9 +1314,9 @@ export function AdminPage() {
                   <th>Email</th>
                   <th>Name</th>
                   <th>Legacy Role</th>
-                  <th>Staff Role</th>
-                  <th>Account Type</th>
-                  <th>Active</th>
+                  <th>{t('staffRole')}</th>
+                  <th>{t('accountType')}</th>
+                  <th>{t('active')}</th>
                   <th>Trust</th>
                   <th>Created</th>
                 </tr>

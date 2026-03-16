@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useState } from 'react';
 import { asHttpError } from '../services/http';
 import { craftsmanProfileService } from '../services/craftsmanProfile.service';
@@ -45,6 +46,7 @@ function parseCsvList(value: string): string[] {
 }
 
 export function CraftsmanProfilePage() {
+  const { t } = useTranslation('craftsmanProfile');
   const [profile, setProfile] = useState<CraftsmanProfileDto | null>(null);
   const [form, setForm] = useState<CraftsmanProfileFormState>(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
@@ -77,7 +79,7 @@ export function CraftsmanProfilePage() {
 
     const profession = form.profession.trim();
     if (!profession) {
-      setError('Profession is required.');
+      setError(t('professionRequired'));
       return;
     }
 
@@ -101,9 +103,9 @@ export function CraftsmanProfilePage() {
       setForm(toFormState(result.profile));
 
       if (result.verificationReset) {
-        setMessage('Craftsman profile updated. Verification badge has been reset and requires admin review.');
+        setMessage(t('resetVerificationMsg'));
       } else {
-        setMessage(result.created ? 'Craftsman profile created successfully.' : 'Craftsman profile updated successfully.');
+        setMessage(result.created ? t('createdMsg') : t('updatedMsg'));
       }
     } catch (err) {
       setError(asHttpError(err).message);
@@ -114,7 +116,7 @@ export function CraftsmanProfilePage() {
 
   return (
     <div>
-      <h1 className="page-title">Craftsman Profile</h1>
+      <h1 className="page-title">{t('title')}</h1>
 
       {loading ? <p>Loading profile...</p> : null}
 
@@ -141,12 +143,10 @@ export function CraftsmanProfilePage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>{profile ? 'Update Craftsman Profile' : 'Create Craftsman Profile'}</h2>
+          <h2>{profile ? t('updateProfile') : t('createProfile')}</h2>
         </div>
         <form onSubmit={handleSubmit} className="form-grid" style={{ padding: '1rem' }}>
-          <label>
-            Profession
-            <input
+          <label>{t('profession')}<input
               className="input"
               type="text"
               value={form.profession}
@@ -156,9 +156,7 @@ export function CraftsmanProfilePage() {
             />
           </label>
 
-          <label>
-            Experience (years)
-            <input
+          <label>{t('experience')}<input
               className="input"
               type="number"
               min={0}
@@ -168,37 +166,31 @@ export function CraftsmanProfilePage() {
             />
           </label>
 
-          <label>
-            Working Hours
-            <input
+          <label>{t('workingHours')}<input
               className="input"
               type="text"
               value={form.workingHours}
               onChange={(event) => setForm((prev) => ({ ...prev, workingHours: event.target.value }))}
               maxLength={255}
-              placeholder="09:00-17:00"
+              placeholder={t('workingHoursPlaceholder')}
             />
           </label>
 
-          <label>
-            Working Areas (comma separated)
-            <input
+          <label>{t('workingAreas')}<input
               className="input"
               type="text"
               value={form.workingAreasCsv}
               onChange={(event) => setForm((prev) => ({ ...prev, workingAreasCsv: event.target.value }))}
-              placeholder="Damascus, Homs"
+              placeholder={t('workingAreasPlaceholder')}
             />
           </label>
 
-          <label>
-            Portfolio URLs (comma separated)
-            <input
+          <label>{t('portfolioUrls')}<input
               className="input"
               type="text"
               value={form.portfolioCsv}
               onChange={(event) => setForm((prev) => ({ ...prev, portfolioCsv: event.target.value }))}
-              placeholder="https://example.com/item-1, https://example.com/item-2"
+              placeholder={t('portfolioUrlsPlaceholder')}
             />
           </label>
 
@@ -207,9 +199,7 @@ export function CraftsmanProfilePage() {
               type="checkbox"
               checked={form.availableNow}
               onChange={(event) => setForm((prev) => ({ ...prev, availableNow: event.target.checked }))}
-            />
-            Available now
-          </label>
+            />{t('availableNow')}</label>
 
           <div>
             <button type="submit" className="button button--primary" disabled={saving}>

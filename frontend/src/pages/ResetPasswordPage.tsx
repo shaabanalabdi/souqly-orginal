@@ -1,9 +1,11 @@
 import { type FormEvent, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/auth.service';
 import { asHttpError } from '../services/http';
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation('auth');
   const location = useLocation();
   const token = useMemo(() => new URLSearchParams(location.search).get('token') ?? '', [location.search]);
   const [newPassword, setNewPassword] = useState('');
@@ -17,14 +19,14 @@ export function ResetPasswordPage() {
     setError(null);
 
     if (!token) {
-      setError('Missing reset token in URL.');
+      setError(t('missingResetToken'));
       return;
     }
 
     setLoading(true);
     try {
       await authService.resetPassword({ token, newPassword });
-      setMessage('Password has been updated successfully.');
+      setMessage(t('passwordUpdated'));
       setNewPassword('');
     } catch (err) {
       setError(asHttpError(err).message);
@@ -35,12 +37,12 @@ export function ResetPasswordPage() {
 
   return (
     <section className="card" style={{ maxWidth: 500, marginInline: 'auto' }}>
-      <h1 className="page-title">Reset Password</h1>
-      <p className="page-subtitle">Set a new strong password.</p>
+      <h1 className="page-title">{t('resetPasswordTitle')}</h1>
+      <p className="page-subtitle">{t('resetPasswordSubtitle')}</p>
 
       <form className="stack" onSubmit={handleSubmit}>
         <label className="field">
-          <span className="label">New Password</span>
+          <span className="label">{t('newPassword')}</span>
           <input
             className="input"
             type="password"
@@ -56,10 +58,10 @@ export function ResetPasswordPage() {
 
         <div className="button-row">
           <button type="submit" className="button button--primary" disabled={loading}>
-            {loading ? 'Updating...' : 'Update password'}
+            {loading ? t('updating') : t('updatePassword')}
           </button>
           <Link to="/login" className="button button--ghost">
-            Back to login
+            {t('backToLogin')}
           </Link>
         </div>
       </form>

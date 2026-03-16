@@ -1,0 +1,41 @@
+﻿src/pages/ChatPage.tsx(22,21): error TS1005: ';' expected.
+src/pages/ChatPage.tsx(267,8): error TS17008: JSX element 'section' has no corresponding closing tag.
+src/pages/ChatPage.tsx(413,35): error TS1145: '{' or JSX element expected.
+src/pages/ChatPage.tsx(413,36): error TS1003: Identifier expected.
+src/pages/ChatPage.tsx(413,49): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/ChatPage.tsx(413,71): error TS17002: Expected corresponding JSX closing tag for 'select'.
+src/pages/ChatPage.tsx(414,35): error TS1145: '{' or JSX element expected.
+src/pages/ChatPage.tsx(414,36): error TS1003: Identifier expected.
+src/pages/ChatPage.tsx(414,49): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/ChatPage.tsx(414,71): error TS17002: Expected corresponding JSX closing tag for 'label'.
+src/pages/ChatPage.tsx(415,35): error TS1145: '{' or JSX element expected.
+src/pages/ChatPage.tsx(415,36): error TS1003: Identifier expected.
+src/pages/ChatPage.tsx(415,50): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/ChatPage.tsx(415,73): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/pages/ChatPage.tsx(416,21): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/pages/ChatPage.tsx(417,19): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/pages/ChatPage.tsx(433,17): error TS17002: Expected corresponding JSX closing tag for 'section'.
+src/pages/ChatPage.tsx(435,11): error TS1005: ')' expected.
+src/pages/ChatPage.tsx(436,9): error TS1109: Expression expected.
+src/pages/ChatPage.tsx(437,7): error TS1109: Expression expected.
+src/pages/ChatPage.tsx(438,5): error TS1109: Expression expected.
+src/pages/ChatPage.tsx(439,3): error TS1109: Expression expected.
+src/pages/PreferencesPage.tsx(177,5): error TS2657: JSX expressions must have one parent element.
+src/pages/PreferencesPage.tsx(385,31): error TS1145: '{' or JSX element expected.
+src/pages/PreferencesPage.tsx(385,32): error TS1003: Identifier expected.
+src/pages/PreferencesPage.tsx(385,46): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/PreferencesPage.tsx(385,69): error TS17002: Expected corresponding JSX closing tag for 'select'.
+src/pages/PreferencesPage.tsx(386,31): error TS1145: '{' or JSX element expected.
+src/pages/PreferencesPage.tsx(386,32): error TS1003: Identifier expected.
+src/pages/PreferencesPage.tsx(386,44): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/PreferencesPage.tsx(386,65): error TS17002: Expected corresponding JSX closing tag for 'label'.
+src/pages/PreferencesPage.tsx(387,31): error TS1145: '{' or JSX element expected.
+src/pages/PreferencesPage.tsx(387,32): error TS1003: Identifier expected.
+src/pages/PreferencesPage.tsx(387,45): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/pages/PreferencesPage.tsx(387,67): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/pages/PreferencesPage.tsx(388,17): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/pages/PreferencesPage.tsx(389,15): error TS17002: Expected corresponding JSX closing tag for 'section'.
+src/pages/PreferencesPage.tsx(416,9): error TS1005: ')' expected.
+src/pages/PreferencesPage.tsx(417,7): error TS1109: Expression expected.
+src/pages/PreferencesPage.tsx(418,5): error TS1109: Expression expected.
+src/pages/PreferencesPage.tsx(419,3): error TS1109: Expression expected.

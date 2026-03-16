@@ -17,19 +17,19 @@ import { useNotificationStore } from '../store/notificationStore';
 import { formatDate } from '../utils/format';
 
 const baseLinks = [
-  { to: '/', label: 'Browse' },
-  { to: '/terms', label: 'Terms' },
-  { to: '/privacy', label: 'Privacy' },
-  { to: '/listings/create', label: 'Post Listing', auth: true },
-  { to: '/chats', label: 'Chats', auth: true },
-  { to: '/deals', label: 'Deals', auth: true },
-  { to: '/preferences', label: 'Preferences', auth: true },
-  { to: '/subscriptions', label: 'Subscriptions', auth: true },
-  { to: '/business-profile', label: 'Business Profile', auth: true },
-  { to: '/craftsman-profile', label: 'Craftsman Profile', auth: true },
-  { to: '/reports', label: 'Reports', auth: true },
-  { to: '/admin', label: 'Admin', auth: true, admin: true },
-] as Array<{ to: string; label: string; auth?: boolean; admin?: boolean }>;
+  { to: '/', label: 'nav.browse' },
+  { to: '/terms', label: 'nav.terms' },
+  { to: '/privacy', label: 'nav.privacy' },
+  { to: '/listings/create', label: 'nav.postListing', auth: true },
+  { to: '/chats', label: 'nav.chats', auth: true },
+  { to: '/deals', label: 'nav.deals', auth: true },
+  { to: '/preferences', label: 'nav.preferences', auth: true },
+  { to: '/subscriptions', label: 'nav.subscriptions', auth: true },
+  { to: '/business-profile', label: 'nav.businessProfile', auth: true },
+  { to: '/craftsman-profile', label: 'nav.craftsmanProfile', auth: true },
+  { to: '/reports', label: 'nav.reports', auth: true },
+  { to: '/admin', label: 'nav.admin', auth: true, admin: true },
+];
 
 export function AppLayout() {
   const navigate = useNavigate();
@@ -107,15 +107,15 @@ export function AppLayout() {
     const unsubscribeThreadCreated = onThreadCreated(() => {
       addNotification({
         kind: 'thread_created',
-        title: 'New conversation',
-        body: 'A new chat thread was opened.',
+        title: t('notifications.newConversation'),
+        body: t('notifications.newThreadOpened'),
       });
       void loadUnreadCount();
     });
 
     const unsubscribeMessageCreated = onMessageCreated((payload) => {
       if (payload.message.senderId !== user.id) {
-        pushToast(`New message in thread #${payload.threadId}`);
+        pushToast(t('notifications.newMsgInThread', { id: payload.threadId }));
         addNotification({
           kind: 'chat_message',
           title: `Thread #${payload.threadId}`,
@@ -128,11 +128,11 @@ export function AppLayout() {
 
     const unsubscribeOfferUpdated = onOfferUpdated((payload) => {
       if (payload.offer.senderId !== user.id) {
-        pushToast(`Offer update in thread #${payload.threadId}`);
+        pushToast(t('notifications.offerUpdate', { id: payload.threadId }));
         addNotification({
           kind: 'offer_update',
-          title: `Offer update in thread #${payload.threadId}`,
-          body: `Offer #${payload.offer.id} is now ${payload.offer.status}`,
+          title: t('notifications.offerUpdate', { id: payload.threadId }),
+          body: t('notifications.offerNow', { id: payload.offer.id, status: payload.offer.status }),
           threadId: payload.threadId,
         });
       }
@@ -166,6 +166,7 @@ export function AppLayout() {
     pushToast,
     setUnreadCount,
     user?.id,
+    t,
   ]);
 
   return (
@@ -187,7 +188,7 @@ export function AppLayout() {
                   to={link.to}
                   className={({ isActive }) => (isActive ? 'nav-link nav-link--active' : 'nav-link')}
                 >
-                  {link.label}
+                  {t(link.label)}
                   {link.to === '/chats' && unreadCount > 0 ? (
                     <span className="nav-counter">{unreadCount > 99 ? '99+' : unreadCount}</span>
                   ) : null}
@@ -203,7 +204,7 @@ export function AppLayout() {
                 className="button button--ghost notification-btn"
                 onClick={() => setNotificationsOpen((open) => !open)}
               >
-                Notifications
+                {t('nav.notifications')}
                 {unreadNotificationsCount > 0 ? (
                   <span className="nav-counter">
                     {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
@@ -222,10 +223,10 @@ export function AppLayout() {
             {!isAuthenticated ? (
               <>
                 <Link to="/login" className="button button--ghost">
-                  Login
+                  {t('nav.login')}
                 </Link>
                 <Link to="/register" className="button button--primary">
-                  Register
+                  {t('nav.register')}
                 </Link>
               </>
             ) : (
@@ -235,7 +236,7 @@ export function AppLayout() {
                 onClick={handleLogout}
                 disabled={isLoading}
               >
-                Logout
+                {t('nav.logout')}
               </button>
             )}
           </div>
@@ -249,13 +250,13 @@ export function AppLayout() {
       {notificationsOpen ? (
         <section className="notification-panel card">
           <div className="card__header">
-            <h3>Notifications</h3>
+            <h3>{t('notifications.title')}</h3>
             <div className="button-row">
               <button type="button" className="button button--ghost" onClick={markAllAsRead}>
-                Mark all read
+                {t('notifications.markAllRead')}
               </button>
               <button type="button" className="button button--ghost" onClick={clearNotifications}>
-                Clear
+                {t('notifications.clear')}
               </button>
             </div>
           </div>
@@ -280,7 +281,7 @@ export function AppLayout() {
                 <div className="row__meta">{formatDate(notification.createdAt)}</div>
               </button>
             ))}
-            {notifications.length === 0 ? <p className="muted-text">No notifications yet.</p> : null}
+            {notifications.length === 0 ? <p className="muted-text">{t('notifications.noNotifications')}</p> : null}
           </div>
         </section>
       ) : null}

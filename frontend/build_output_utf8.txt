@@ -1,0 +1,9 @@
+﻿
+> souqly-fe@0.0.0 build
+> tsc -b && vite build
+
+src/pages/AdminPage.tsx(58,12): error TS2304: Cannot find name 't'.
+src/pages/PreferencesPage.tsx(31,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'NotificationFrequency | (() => NotificationFrequency)'.
+src/pages/SubscriptionsPage.tsx(14,32): error TS2304: Cannot find name 't'.
+src/pages/SubscriptionsPage.tsx(15,32): error TS2304: Cannot find name 't'.
+src/pages/SubscriptionsPage.tsx(16,33): error TS2304: Cannot find name 't'.

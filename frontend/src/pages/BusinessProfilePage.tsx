@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { asHttpError } from '../services/http';
 import { businessProfileService } from '../services/businessProfile.service';
 import { formatDate } from '../utils/format';
@@ -28,6 +29,7 @@ function toFormState(profile: BusinessProfileDto): BusinessProfileFormState {
 }
 
 export function BusinessProfilePage() {
+  const { t } = useTranslation('businessProfile');
   const [profile, setProfile] = useState<BusinessProfileDto | null>(null);
   const [form, setForm] = useState<BusinessProfileFormState>(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export function BusinessProfilePage() {
     setError(null);
 
     if (!form.companyName.trim()) {
-      setError('Company name is required.');
+      setError(t('companyNameRequired'));
       return;
     }
 
@@ -76,9 +78,9 @@ export function BusinessProfilePage() {
       setForm(toFormState(result.profile));
 
       if (result.verificationReset) {
-        setMessage('Business profile updated. Verification badge has been reset and requires admin review.');
+        setMessage(t('resetVerificationMsg'));
       } else {
-        setMessage(result.created ? 'Business profile created successfully.' : 'Business profile updated successfully.');
+        setMessage(result.created ? t('createdMsg') : t('updatedMsg'));
       }
     } catch (err) {
       setError(asHttpError(err).message);
@@ -89,25 +91,25 @@ export function BusinessProfilePage() {
 
   return (
     <div>
-      <h1 className="page-title">Business Profile</h1>
+      <h1 className="page-title">{t('title')}</h1>
 
       {loading ? <p>Loading profile...</p> : null}
 
       {profile ? (
         <section className="card" style={{ marginBottom: '1.5rem' }}>
           <div className="card__header">
-            <h2>Verification Status</h2>
+            <h2>{t('verificationStatus')}</h2>
             <span className={profile.verifiedByAdmin ? 'badge badge--success' : 'badge badge--warning'}>
-              {profile.verifiedByAdmin ? 'Verified by admin' : 'Pending verification'}
+              {profile.verifiedByAdmin ? t('verifiedByAdmin') : t('pendingVerification')}
             </span>
           </div>
           <div className="list">
             <div className="row">
-              <span className="row__label">Last updated</span>
+              <span className="row__label">{t('lastUpdated')}</span>
               <span className="row__value">{formatDate(profile.updatedAt)}</span>
             </div>
             <div className="row">
-              <span className="row__label">Verified at</span>
+              <span className="row__label">{t('verifiedAt')}</span>
               <span className="row__value">{profile.verifiedAt ? formatDate(profile.verifiedAt) : '-'}</span>
             </div>
           </div>
@@ -116,11 +118,11 @@ export function BusinessProfilePage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>{profile ? 'Update Business Profile' : 'Create Business Profile'}</h2>
+          <h2>{profile ? t('updateProfile') : t('createProfile')}</h2>
         </div>
         <form onSubmit={handleSubmit} className="form-grid" style={{ padding: '1rem' }}>
           <label>
-            Company Name
+            {t('companyName')}
             <input
               className="input"
               type="text"
@@ -132,7 +134,7 @@ export function BusinessProfilePage() {
           </label>
 
           <label>
-            Commercial Register
+            {t('commercialRegister')}
             <input
               className="input"
               type="text"
@@ -143,7 +145,7 @@ export function BusinessProfilePage() {
           </label>
 
           <label>
-            Tax Number
+            {t('taxNumber')}
             <input
               className="input"
               type="text"
@@ -154,20 +156,20 @@ export function BusinessProfilePage() {
           </label>
 
           <label>
-            Website
+            {t('website')}
             <input
               className="input"
               type="url"
               value={form.website}
               onChange={(event) => setForm((prev) => ({ ...prev, website: event.target.value }))}
               maxLength={300}
-              placeholder="https://example.com"
+              placeholder={t('websitePlaceholder')}
             />
           </label>
 
           <div>
             <button type="submit" className="button button--primary" disabled={saving}>
-              {saving ? 'Saving...' : profile ? 'Save Changes' : 'Create Profile'}
+              {saving ? t('saving') : profile ? t('saveChanges') : t('createBtn')}
             </button>
           </div>
         </form>

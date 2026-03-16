@@ -1,10 +1,12 @@
 import { type FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/auth.service';
 import { asHttpError } from '../services/http';
 import { useAuthStore } from '../store/authStore';
 
 export function RegisterPage() {
+  const { t } = useTranslation();
   const register = useAuthStore((state) => state.register);
   const isLoading = useAuthStore((state) => state.isLoading);
   const error = useAuthStore((state) => state.error);
@@ -23,17 +25,17 @@ export function RegisterPage() {
     setResendMessage(null);
 
     const result = await register({ email, password, fullName });
-    setSuccessMessage(`Registration completed for ${result.email}. Please verify your email before login.`);
+    setSuccessMessage(t('auth.registerSuccessMsg', { email: result.email }));
   };
 
   const handleResend = async () => {
     try {
       if (!email) {
-        setResendMessage('Enter your email first.');
+        setResendMessage(t('auth.resendRequiresEmail'));
         return;
       }
       await authService.resendVerification(email);
-      setResendMessage('If your account is unverified, a new link was sent.');
+      setResendMessage(t('auth.resendSuccessMsg'));
     } catch (err) {
       setResendMessage(asHttpError(err).message);
     }
@@ -41,12 +43,12 @@ export function RegisterPage() {
 
   return (
     <section className="card" style={{ maxWidth: 540, marginInline: 'auto' }}>
-      <h1 className="page-title">Create account</h1>
-      <p className="page-subtitle">Password must include uppercase, lowercase, number, and symbol.</p>
+      <h1 className="page-title">{t('auth.registerTitle')}</h1>
+      <p className="page-subtitle">{t('auth.registerSubtitle')}</p>
 
       <form className="stack" onSubmit={handleSubmit}>
         <label className="field">
-          <span className="label">Full name</span>
+          <span className="label">{t('auth.fullName')}</span>
           <input
             className="input"
             required
@@ -58,7 +60,7 @@ export function RegisterPage() {
         </label>
 
         <label className="field">
-          <span className="label">Email</span>
+          <span className="label">{t('auth.email')}</span>
           <input
             className="input"
             type="email"
@@ -69,7 +71,7 @@ export function RegisterPage() {
         </label>
 
         <label className="field">
-          <span className="label">Password</span>
+          <span className="label">{t('auth.password')}</span>
           <input
             className="input"
             type="password"
@@ -86,16 +88,16 @@ export function RegisterPage() {
 
         <div className="button-row">
           <button type="submit" className="button button--primary" disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Register'}
+            {isLoading ? t('auth.creating') : t('auth.submitRegister')}
           </button>
           <button type="button" className="button button--ghost" onClick={handleResend}>
-            Resend verification
+            {t('auth.resendVerification')}
           </button>
         </div>
       </form>
 
       <p className="muted-text">
-        Already have account? <Link to="/login">Login</Link>
+        {t('auth.alreadyHaveAccount')} <Link to="/login">{t('auth.loginLink')}</Link>
       </p>
     </section>
   );

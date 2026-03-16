@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { subscriptionsService } from '../services/subscriptions.service';
@@ -9,12 +10,6 @@ import type {
   StoreSubscriptionStatus,
 } from '../types/domain';
 
-const BILLING_CYCLES = [
-  { months: 1 as const, label: 'Monthly' },
-  { months: 3 as const, label: 'Quarterly (−5%)' },
-  { months: 12 as const, label: 'Yearly (−15%)' },
-];
-
 function statusBadgeClass(status: StoreSubscriptionStatus): string {
   if (status === 'ACTIVE') return 'badge badge--success';
   if (status === 'CANCELED') return 'badge badge--danger';
@@ -22,6 +17,12 @@ function statusBadgeClass(status: StoreSubscriptionStatus): string {
 }
 
 export function SubscriptionsPage() {
+  const { t } = useTranslation('subscriptions');
+  const BILLING_CYCLES = [
+    { months: 1 as const, label: t('monthly') },
+    { months: 3 as const, label: t('quarterly') },
+    { months: 12 as const, label: t('yearly') },
+  ];
   const [plans, setPlans] = useState<StorePlanDto[]>([]);
   const [current, setCurrent] = useState<CurrentStoreSubscriptionDto | null>(null);
   const [loading, setLoading] = useState(false);
@@ -68,13 +69,13 @@ export function SubscriptionsPage() {
   };
 
   const handleCancel = async () => {
-    if (!window.confirm('Cancel your current subscription?')) return;
+    if (!window.confirm(t('cancelConfirm'))) return;
     setActionLoading(true);
     setMessage(null);
     setError(null);
     try {
       await subscriptionsService.cancel();
-      setMessage('Subscription canceled.');
+      setMessage(t('canceledMsg'));
       await loadData();
     } catch (err) {
       setError(asHttpError(err).message);
@@ -94,15 +95,13 @@ export function SubscriptionsPage() {
 
   return (
     <div>
-      <h1 className="page-title">Store Subscriptions</h1>
+      <h1 className="page-title">{t('title')}</h1>
 
       {!current?.eligibleForStorePlans && current !== null ? (
         <div className="alert alert--info">
           Store subscriptions are available for <strong>business profiles</strong> only. Upgrade your
           profile to unlock store plans.{' '}
-          <Link to="/business-profile" className="link-inline">
-            Open Business Profile
-          </Link>
+          <Link to="/business-profile" className="link-inline">{t('openBusinessProfile')}</Link>
         </div>
       ) : null}
 
@@ -110,24 +109,24 @@ export function SubscriptionsPage() {
       {activeSub ? (
         <section className="card" style={{ marginBottom: '2rem' }}>
           <div className="card__header">
-            <h2>Current Subscription</h2>
+            <h2>{t('currentSubscription')}</h2>
             <span className={statusBadgeClass(activeSub.status)}>{activeSub.status}</span>
           </div>
           <div className="list">
             <div className="row">
-              <span className="row__label">Plan</span>
+              <span className="row__label">{t('plan')}</span>
               <span className="row__value">{activeSub.planName}</span>
             </div>
             <div className="row">
-              <span className="row__label">Price paid</span>
+              <span className="row__label">{t('pricePaid')}</span>
               <span className="row__value">${activeSub.priceUsd.toFixed(2)}</span>
             </div>
             <div className="row">
-              <span className="row__label">Started</span>
+              <span className="row__label">{t('started')}</span>
               <span className="row__value">{formatDate(activeSub.startedAt)}</span>
             </div>
             <div className="row">
-              <span className="row__label">Expires</span>
+              <span className="row__label">{t('expires')}</span>
               <span className="row__value">
                 {formatDate(activeSub.expiresAt)}{' '}
                 {isActive ? (
@@ -136,8 +135,8 @@ export function SubscriptionsPage() {
               </span>
             </div>
             <div className="row">
-              <span className="row__label">Auto-renew</span>
-              <span className="row__value">{activeSub.autoRenew ? 'Yes' : 'No'}</span>
+              <span className="row__label">{t('autoRenew')}</span>
+              <span className="row__value">{activeSub.autoRenew ? t('yes') : t('no')}</span>
             </div>
           </div>
           {isActive ? (
@@ -147,9 +146,7 @@ export function SubscriptionsPage() {
                 className="button button--danger"
                 onClick={handleCancel}
                 disabled={actionLoading}
-              >
-                Cancel Subscription
-              </button>
+              >{t('cancelSubscription')}</button>
             </div>
           ) : null}
         </section>
@@ -157,7 +154,7 @@ export function SubscriptionsPage() {
 
       {/* Billing cycle selector */}
       <section style={{ marginBottom: '1.5rem' }}>
-        <h2>Choose Billing Cycle</h2>
+        <h2>{t('chooseBillingCycle')}</h2>
         <div className="button-row">
           {BILLING_CYCLES.map((cycle) => (
             <button
@@ -175,14 +172,12 @@ export function SubscriptionsPage() {
             type="checkbox"
             checked={autoRenew}
             onChange={(e) => setAutoRenew(e.target.checked)}
-          />
-          Auto-renew
-        </label>
+          />{t('autoRenew')}</label>
       </section>
 
       {/* Plans grid */}
       {loading ? (
-        <p>Loading plans…</p>
+        <p>{t('loadingPlans')}</p>
       ) : (
         <div className="grid grid--3col">
           {plans.map((plan) => (
@@ -193,24 +188,24 @@ export function SubscriptionsPage() {
               </div>
               <div className="list">
                 <div className="row">
-                  <span className="row__label">Price</span>
+                  <span className="row__label">{t('price')}</span>
                   <span className="row__value">
                     <strong>${getPlanPrice(plan).toFixed(2)}</strong>
-                    {selectedCycle === 1 ? '/mo' : selectedCycle === 3 ? '/3 mo' : '/yr'}
+                    {selectedCycle === 1 ? t('perMonth') : selectedCycle === 3 ? t('per3Months') : t('perYear')}
                   </span>
                 </div>
                 <div className="row">
-                  <span className="row__label">Listings / month</span>
+                  <span className="row__label">{t('listingsPerMonth')}</span>
                   <span className="row__value">
-                    {plan.maxListingsPerMonth === null ? 'Unlimited' : plan.maxListingsPerMonth}
+                    {plan.maxListingsPerMonth === null ? t('unlimited') : plan.maxListingsPerMonth}
                   </span>
                 </div>
                 <div className="row">
-                  <span className="row__label">Featured slots</span>
+                  <span className="row__label">{t('featuredSlots')}</span>
                   <span className="row__value">{plan.featuredSlots}</span>
                 </div>
                 <div className="row">
-                  <span className="row__label">Analytics</span>
+                  <span className="row__label">{t('analytics')}</span>
                   <span className="row__value" style={{ textTransform: 'capitalize' }}>
                     {plan.analyticsLevel}
                   </span>
@@ -225,7 +220,7 @@ export function SubscriptionsPage() {
                     onClick={() => handleSubscribe(plan.code)}
                     disabled={actionLoading || (isActive && activeSub?.planCode === plan.code)}
                   >
-                    {isActive && activeSub?.planCode === plan.code ? 'Current Plan' : 'Subscribe'}
+                    {isActive && activeSub?.planCode === plan.code ? t('currentPlanBtn') : t('subscribeBtn')}
                   </button>
                 </div>
               ) : null}

@@ -1,0 +1,22 @@
+﻿
+> souqly-fe@0.0.0 lint
+> eslint .
+
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\AdminPage.tsx
+  75:11  error  't' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\ChatPage.tsx
+  102:6  warning  React Hook useCallback has an unnecessary dependency: 't'. Either exclude it or remove the dependency array. Outer scope values like 't' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\CraftsmanProfilePage.tsx
+  49:11  error  't' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\PreferencesPage.tsx
+  18:11  error  't' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\SubscriptionsPage.tsx
+  26:11  error  't' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+Ô£û 5 problems (4 errors, 1 warning)
+

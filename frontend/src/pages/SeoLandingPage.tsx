@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { asHttpError } from '../services/http';
 import { categoriesService } from '../services/categories.service';
 import { geoService } from '../services/geo.service';
@@ -8,6 +9,7 @@ import type { ListingSummary } from '../types/domain';
 import { formatDate, formatMoney } from '../utils/format';
 
 export function SeoLandingPage() {
+  const { t } = useTranslation(['seo', 'home']);
   const params = useParams();
   const countryCode = (params.countryCode ?? '').toUpperCase();
   const cityId = Number(params.cityId);
@@ -24,7 +26,7 @@ export function SeoLandingPage() {
   useEffect(() => {
     const load = async () => {
       if (!countryCode || !Number.isFinite(cityId) || cityId <= 0 || !categorySlug) {
-        setError('Invalid SEO route parameters.');
+        setError(t('seo:invalidRouteParams'));
         setLoading(false);
         return;
       }
@@ -40,7 +42,7 @@ export function SeoLandingPage() {
 
         const city = geoResult.cities.find((item) => item.id === cityId);
         if (!city) {
-          setError('City not found for this country.');
+          setError(t('seo:cityNotFound'));
           setLoading(false);
           return;
         }
@@ -70,7 +72,7 @@ export function SeoLandingPage() {
     };
 
     void load();
-  }, [categorySlug, cityId, countryCode]);
+  }, [categorySlug, cityId, countryCode, t]);
 
   const itemListJsonLd = useMemo(() => {
     if (listings.length === 0) {
@@ -93,7 +95,7 @@ export function SeoLandingPage() {
   }, [categoryName, cityName, countryName, listings]);
 
   if (loading) {
-    return <p className="muted-text">Loading SEO landing page...</p>;
+    return <p className="muted-text">{t('seo:loading')}</p>;
   }
 
   if (error) {
@@ -110,21 +112,21 @@ export function SeoLandingPage() {
       ) : null}
 
       <section className="hero">
-        <h1 className="page-title">{categoryName} in {cityName}</h1>
+        <h1 className="page-title">{t('seo:title', { category: categoryName, city: cityName })}</h1>
         <p className="page-subtitle">
-          Browse {categoryName} listings in {cityName}, {countryName}.
+          {t('seo:subtitle', { category: categoryName, city: cityName, country: countryName })}
         </p>
         {countryId ? (
           <p className="muted-text">
-            SEO key: <code>{countryCode}-{cityId}-{categorySlug}</code>
+            {t('seo:seoKey')} <code>{countryCode}-{cityId}-{categorySlug}</code>
           </p>
         ) : null}
       </section>
 
       <section className="card">
         <div className="card__header">
-          <h2>Listings</h2>
-          <span className="muted-text">{listings.length} items</span>
+          <h2>{t('seo:listingsTitle')}</h2>
+          <span className="muted-text">{t('home:itemsCount', { count: listings.length })}</span>
         </div>
         <div className="list">
           {listings.map((listing) => (
@@ -132,7 +134,7 @@ export function SeoLandingPage() {
               <div className="row__title">
                 <Link to={`/listings/${listing.id}`}>
                   {listing.title}
-                  {listing.isFeatured ? ' [FEATURED]' : ''}
+                  {listing.isFeatured ? t('home:featuredLabel') : ''}
                 </Link>
               </div>
               <p>{listing.description}</p>
@@ -142,7 +144,7 @@ export function SeoLandingPage() {
             </article>
           ))}
           {listings.length === 0 ? (
-            <p className="muted-text">No listings currently available for this landing page.</p>
+            <p className="muted-text">{t('seo:noListings')}</p>
           ) : null}
         </div>
       </section>

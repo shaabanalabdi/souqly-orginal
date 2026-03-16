@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { asHttpError } from '../services/http';
 import { categoriesService } from '../services/categories.service';
 import { geoService } from '../services/geo.service';
@@ -33,6 +34,7 @@ const initialFilters: FiltersState = {
 };
 
 export function HomePage() {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<FiltersState>(initialFilters);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -134,33 +136,33 @@ export function HomePage() {
   return (
     <div className="stack">
       <section className="hero">
-        <h1 className="page-title">Souqly Marketplace</h1>
+        <h1 className="page-title">{t('home.title')}</h1>
         <p className="page-subtitle">
-          Search active listings across categories, countries, and cities.
+          {t('home.subtitle')}
         </p>
       </section>
 
       <section className="card">
         <div className="card__header">
-          <h2>Search Listings</h2>
+          <h2>{t('home.searchListings')}</h2>
           <button type="button" className="button button--secondary" onClick={loadListings} disabled={loading}>
-            Refresh
+            {t('home.refresh')}
           </button>
         </div>
 
         <div className="grid grid--3">
           <label className="field">
-            <span className="label">Keyword</span>
+            <span className="label">{t('home.keyword')}</span>
             <input
               className="input"
               value={filters.q}
               onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
-              placeholder="phone, car, apartment..."
+              placeholder={t('home.keywordPlaceholder')}
             />
           </label>
 
           <label className="field">
-            <span className="label">Category</span>
+            <span className="label">{t('home.category')}</span>
             <select
               className="select"
               value={filters.categorySlug}
@@ -168,7 +170,7 @@ export function HomePage() {
                 setFilters((prev) => ({ ...prev, categorySlug: event.target.value, subcategoryId: '' }))
               }
             >
-              <option value="">All categories</option>
+              <option value="">{t('home.allCategories')}</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.slug}>
                   {category.name}
@@ -178,14 +180,14 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">Subcategory</span>
+            <span className="label">{t('home.subcategory')}</span>
             <select
               className="select"
               value={filters.subcategoryId}
               onChange={(event) => setFilters((prev) => ({ ...prev, subcategoryId: event.target.value }))}
               disabled={subcategories.length === 0}
             >
-              <option value="">All subcategories</option>
+              <option value="">{t('home.allSubcategories')}</option>
               {subcategories.map((subcategory) => (
                 <option key={subcategory.id} value={subcategory.id}>
                   {subcategory.name}
@@ -195,13 +197,13 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">Country</span>
+            <span className="label">{t('home.country')}</span>
             <select
               className="select"
               value={filters.countryId}
               onChange={(event) => setFilters((prev) => ({ ...prev, countryId: event.target.value, cityId: '' }))}
             >
-              <option value="">All countries</option>
+              <option value="">{t('home.allCountries')}</option>
               {countries.map((country) => (
                 <option key={country.id} value={country.id}>
                   {country.name}
@@ -211,14 +213,14 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">City</span>
+            <span className="label">{t('home.city')}</span>
             <select
               className="select"
               value={filters.cityId}
               onChange={(event) => setFilters((prev) => ({ ...prev, cityId: event.target.value }))}
               disabled={cities.length === 0}
             >
-              <option value="">All cities</option>
+              <option value="">{t('home.allCities')}</option>
               {cities.map((city) => (
                 <option key={city.id} value={city.id}>
                   {city.name}
@@ -228,7 +230,7 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">Min Price</span>
+            <span className="label">{t('home.minPrice')}</span>
             <input
               className="input"
               type="number"
@@ -239,7 +241,7 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">Max Price</span>
+            <span className="label">{t('home.maxPrice')}</span>
             <input
               className="input"
               type="number"
@@ -250,7 +252,7 @@ export function HomePage() {
           </label>
 
           <label className="field">
-            <span className="label">Sort</span>
+            <span className="label">{t('home.sort')}</span>
             <select
               className="select"
               value={filters.sort}
@@ -258,29 +260,29 @@ export function HomePage() {
                 setFilters((prev) => ({ ...prev, sort: event.target.value as FiltersState['sort'] }))
               }
             >
-              <option value="newest">Newest</option>
-              <option value="featured">Featured first</option>
-              <option value="price_asc">Price ascending</option>
-              <option value="price_desc">Price descending</option>
+              <option value="newest">{t('home.sortNewest')}</option>
+              <option value="featured">{t('home.sortFeatured')}</option>
+              <option value="price_asc">{t('home.sortPriceAsc')}</option>
+              <option value="price_desc">{t('home.sortPriceDesc')}</option>
             </select>
           </label>
 
           <label className="field">
-            <span className="label">Featured only</span>
+            <span className="label">{t('home.featuredOnly')}</span>
             <select
               className="select"
               value={filters.featuredOnly ? 'true' : 'false'}
               onChange={(event) => setFilters((prev) => ({ ...prev, featuredOnly: event.target.value === 'true' }))}
             >
-              <option value="false">No</option>
-              <option value="true">Yes</option>
+              <option value="false">{t('home.no')}</option>
+              <option value="true">{t('home.yes')}</option>
             </select>
           </label>
         </div>
 
         <div className="button-row">
           <button type="button" className="button button--primary" onClick={loadListings} disabled={loading}>
-            {loading ? 'Searching...' : 'Search'}
+            {loading ? t('home.searching') : t('home.search')}
           </button>
           <button
             type="button"
@@ -291,7 +293,7 @@ export function HomePage() {
               setCities([]);
             }}
           >
-            Clear
+            {t('home.clear')}
           </button>
         </div>
 
@@ -300,8 +302,10 @@ export function HomePage() {
 
       <section className="card">
         <div className="card__header">
-          <h2>Results</h2>
-          <span className="muted-text">{meta ? `${meta.total} items` : `${listings.length} items`}</span>
+          <h2>{t('home.results')}</h2>
+          <span className="muted-text">
+            {meta ? t('home.itemsCount', { count: meta.total }) : t('home.itemsCount', { count: listings.length })}
+          </span>
         </div>
 
         <div className="list">
@@ -310,7 +314,7 @@ export function HomePage() {
               <div className="row__title">
                 <Link to={`/listings/${listing.id}`}>
                   {listing.title}
-                  {listing.isFeatured ? ' [FEATURED]' : ''}
+                  {listing.isFeatured ? t('home.featuredLabel') : ''}
                 </Link>
               </div>
               <p>{listing.description}</p>
@@ -320,7 +324,7 @@ export function HomePage() {
               </div>
             </article>
           ))}
-          {!loading && listings.length === 0 ? <p className="muted-text">No active listings found.</p> : null}
+          {!loading && listings.length === 0 ? <p className="muted-text">{t('home.noActiveListings')}</p> : null}
         </div>
       </section>
     </div>

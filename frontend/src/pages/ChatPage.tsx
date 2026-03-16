@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { chatsService } from '../services/chats.service';
 import { asHttpError } from '../services/http';
@@ -32,6 +33,7 @@ function upsertMessage(messages: ChatMessage[], nextMessage: ChatMessage): ChatM
 }
 
 export function ChatPage() {
+  const { t } = useTranslation('chats');
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUserId = useAuthStore((state) => state.user?.id ?? 0);
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -99,7 +101,7 @@ export function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadThreads();
@@ -256,8 +258,8 @@ export function ChatPage() {
 
   return (
     <div className="stack">
-      <h1 className="page-title">Chats</h1>
-      <p className="page-subtitle">Threads, messages, offers, and phone requests in realtime.</p>
+      <h1 className="page-title">{t('title')}</h1>
+      <p className="page-subtitle">{t('subtitle')}</p>
 
       {error ? <p className="error-text">{error}</p> : null}
       {statusMessage ? <p className="muted-text">{statusMessage}</p> : null}
@@ -265,10 +267,8 @@ export function ChatPage() {
       <section className="split">
         <aside className="split__aside card">
           <div className="card__header">
-            <h2>Threads</h2>
-            <button type="button" className="button button--ghost" onClick={() => void loadThreads()} disabled={loadingThreads}>
-              Refresh
-            </button>
+            <h2>{t('threads')}</h2>
+            <button type="button" className="button button--ghost" onClick={() => void loadThreads()} disabled={loadingThreads}>{t('refresh')}</button>
           </div>
 
           <div className="list">
@@ -284,22 +284,22 @@ export function ChatPage() {
                   {thread.unreadCount > 0 ? <span className="thread-counter">{thread.unreadCount}</span> : null}
                 </div>
                 <div className="row__meta">
-                  Last: {thread.lastMessage?.content ?? 'No message yet'} - {formatDate(thread.lastMessageAt)}
+                  Last: {thread.lastMessage?.content ?? t('noMessageYet')} - {formatDate(thread.lastMessageAt)}
                 </div>
               </button>
             ))}
-            {!loadingThreads && threads.length === 0 ? <p className="muted-text">No threads yet.</p> : null}
+            {!loadingThreads && threads.length === 0 ? <p className="muted-text">{t('noThreads')}</p> : null}
           </div>
         </aside>
 
         <section className="split__main card">
           <div className="card__header">
-            <h2>Messages</h2>
-            <span className="muted-text">{selectedThreadId ? `Thread #${selectedThreadId}` : 'No thread selected'}</span>
+            <h2>{t('messages')}</h2>
+            <span className="muted-text">{selectedThreadId ? `Thread #${selectedThreadId}` : t('noThreadSelected')}</span>
           </div>
 
           <div className="messages">
-            {loadingMessages ? <p className="muted-text">Loading messages...</p> : null}
+            {loadingMessages ? <p className="muted-text">{t('loadingMessages')}</p> : null}
             {orderedMessages.map((message) => {
               const isOwn = message.senderId === currentUserId;
               const offerMessage = message.type === 'OFFER' ? parseOfferSystemMessage(message.content) : null;
@@ -319,40 +319,36 @@ export function ChatPage() {
                 </article>
               );
             })}
-            {!loadingMessages && orderedMessages.length === 0 ? <p className="muted-text">No messages yet.</p> : null}
+            {!loadingMessages && orderedMessages.length === 0 ? <p className="muted-text">{t('noMessagesYet')}</p> : null}
           </div>
 
           <div className="grid grid--2" style={{ marginTop: '0.8rem' }}>
             <div className="card">
-              <h3>Send Message</h3>
+              <h3>{t('sendMessage')}</h3>
               <div className="stack">
                 <label className="field">
-                  <span className="label">Text message</span>
+                  <span className="label">{t('textMessage')}</span>
                   <input className="input" value={messageText} onChange={(event) => setMessageText(event.target.value)} />
                 </label>
                 <div className="button-row">
-                  <button type="button" className="button button--primary" onClick={sendTextMessage} disabled={!selectedThreadId}>
-                    Send text
-                  </button>
+                  <button type="button" className="button button--primary" onClick={sendTextMessage} disabled={!selectedThreadId}>{t('sendText')}</button>
                 </div>
 
                 <label className="field">
-                  <span className="label">Image URL</span>
+                  <span className="label">{t('imageUrl')}</span>
                   <input className="input" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
                 </label>
                 <div className="button-row">
-                  <button type="button" className="button button--secondary" onClick={sendImageMessage} disabled={!selectedThreadId}>
-                    Send image
-                  </button>
+                  <button type="button" className="button button--secondary" onClick={sendImageMessage} disabled={!selectedThreadId}>{t('sendImage')}</button>
                 </div>
               </div>
             </div>
 
             <div className="card">
-              <h3>Negotiation Tools</h3>
+              <h3>{t('negotiationTools')}</h3>
               <div className="stack">
                 <label className="field">
-                  <span className="label">Offer amount</span>
+                  <span className="label">{t('offerAmount')}</span>
                   <input
                     className="input"
                     type="number"
@@ -362,7 +358,7 @@ export function ChatPage() {
                   />
                 </label>
                 <label className="field">
-                  <span className="label">Offer quantity</span>
+                  <span className="label">{t('offerQuantity')}</span>
                   <input
                     className="input"
                     type="number"
@@ -372,7 +368,7 @@ export function ChatPage() {
                   />
                 </label>
                 <label className="field">
-                  <span className="label">Offer message</span>
+                  <span className="label">{t('offerMessage')}</span>
                   <input
                     className="input"
                     value={offerMessage}
@@ -380,13 +376,11 @@ export function ChatPage() {
                   />
                 </label>
                 <div className="button-row">
-                  <button type="button" className="button button--warning" onClick={sendOffer} disabled={!selectedThreadId}>
-                    Send offer
-                  </button>
+                  <button type="button" className="button button--warning" onClick={sendOffer} disabled={!selectedThreadId}>{t('sendOffer')}</button>
                 </div>
 
                 <label className="field">
-                  <span className="label">Phone request note</span>
+                  <span className="label">{t('phoneRequestNote')}</span>
                   <input
                     className="input"
                     value={phoneMessage}
@@ -394,15 +388,13 @@ export function ChatPage() {
                   />
                 </label>
                 <div className="button-row">
-                  <button type="button" className="button button--secondary" onClick={requestPhone} disabled={!selectedThreadId}>
-                    Request phone
-                  </button>
+                  <button type="button" className="button button--secondary" onClick={requestPhone} disabled={!selectedThreadId}>{t('requestPhone')}</button>
                 </div>
 
                 <hr />
 
                 <label className="field">
-                  <span className="label">Offer ID</span>
+                  <span className="label">{t('offerId')}</span>
                   <input
                     className="input"
                     type="number"
@@ -412,20 +404,20 @@ export function ChatPage() {
                   />
                 </label>
                 <label className="field">
-                  <span className="label">Action</span>
+                  <span className="label">{t('action')}</span>
                   <select
                     className="select"
                     value={offerAction}
                     onChange={(event) => setOfferAction(event.target.value as OfferAction)}
                   >
-                    <option value="accept">accept</option>
-                    <option value="reject">reject</option>
-                    <option value="counter">counter</option>
+                    <option value="accept">{t('accept')}</option>
+                    <option value="reject">{t('reject')}</option>
+                    <option value="counter">{t('counter')}</option>
                   </select>
                 </label>
                 {offerAction === 'counter' ? (
                   <label className="field">
-                    <span className="label">Counter amount</span>
+                    <span className="label">{t('counterAmount')}</span>
                     <input
                       className="input"
                       type="number"
@@ -436,9 +428,7 @@ export function ChatPage() {
                   </label>
                 ) : null}
                 <div className="button-row">
-                  <button type="button" className="button button--danger" onClick={respondToOffer}>
-                    Respond offer
-                  </button>
+                  <button type="button" className="button button--danger" onClick={respondToOffer}>{t('respondOffer')}</button>
                 </div>
               </div>
             </div>

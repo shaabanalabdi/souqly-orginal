@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { reportsService } from '../services/reports.service';
 import { asHttpError } from '../services/http';
 import type { ReportReason, ReportStatus, UserReport } from '../types/domain';
@@ -7,6 +8,7 @@ import { formatDate } from '../utils/format';
 type StatusFilter = '' | ReportStatus;
 
 export function ReportsPage() {
+  const { t } = useTranslation('reports');
   const [reports, setReports] = useState<UserReport[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [loading, setLoading] = useState(false);
@@ -40,7 +42,7 @@ export function ReportsPage() {
   const handleCreateReport = async () => {
     const targetId = Number(reportableId);
     if (!Number.isFinite(targetId) || targetId <= 0) {
-      setMessage('Reportable id must be a positive number.');
+      setMessage(t('reportableIdPositive'));
       return;
     }
 
@@ -53,7 +55,7 @@ export function ReportsPage() {
         description: description || undefined,
         listingId: linkedListingId ? Number(linkedListingId) : undefined,
       });
-      setMessage('Report submitted.');
+      setMessage(t('reportSubmitted'));
       setReportableId('');
       setDescription('');
       setLinkedListingId('');
@@ -65,17 +67,17 @@ export function ReportsPage() {
 
   return (
     <div className="stack">
-      <h1 className="page-title">Reports</h1>
-      <p className="page-subtitle">Submit abuse/fraud reports and monitor your report queue.</p>
+      <h1 className="page-title">{t('title')}</h1>
+      <p className="page-subtitle">{t('subtitle')}</p>
 
       {error ? <p className="error-text">{error}</p> : null}
       {message ? <p className="muted-text">{message}</p> : null}
 
       <section className="card">
-        <h2>Create Report</h2>
+        <h2>{t('createReport')}</h2>
         <div className="grid grid--3">
           <label className="field">
-            <span className="label">Type</span>
+            <span className="label">{t('type')}</span>
             <select
               className="select"
               value={reportableType}
@@ -88,7 +90,7 @@ export function ReportsPage() {
           </label>
 
           <label className="field">
-            <span className="label">Target ID</span>
+            <span className="label">{t('targetId')}</span>
             <input
               className="input"
               type="number"
@@ -99,7 +101,7 @@ export function ReportsPage() {
           </label>
 
           <label className="field">
-            <span className="label">Reason</span>
+            <span className="label">{t('reason')}</span>
             <select className="select" value={reason} onChange={(event) => setReason(event.target.value as ReportReason)}>
               <option value="FRAUD">FRAUD</option>
               <option value="INAPPROPRIATE">INAPPROPRIATE</option>
@@ -110,7 +112,7 @@ export function ReportsPage() {
           </label>
 
           <label className="field">
-            <span className="label">Linked Listing ID (optional)</span>
+            <span className="label">{t('linkedListingId')}</span>
             <input
               className="input"
               type="number"
@@ -122,7 +124,7 @@ export function ReportsPage() {
         </div>
 
         <label className="field" style={{ marginTop: '0.7rem' }}>
-          <span className="label">Description</span>
+          <span className="label">{t('description')}</span>
           <textarea
             className="textarea"
             maxLength={2000}
@@ -133,27 +135,27 @@ export function ReportsPage() {
 
         <div className="button-row">
           <button type="button" className="button button--danger" onClick={handleCreateReport}>
-            Submit report
+            {t('submitReport')}
           </button>
         </div>
       </section>
 
       <section className="card">
         <div className="card__header">
-          <h2>My Reports</h2>
+          <h2>{t('myReports')}</h2>
           <div className="inline">
             <select
               className="select"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             >
-              <option value="">All statuses</option>
+              <option value="">{t('allStatuses')}</option>
               <option value="PENDING">PENDING</option>
               <option value="RESOLVED">RESOLVED</option>
               <option value="DISMISSED">DISMISSED</option>
             </select>
             <button type="button" className="button button--secondary" onClick={loadReports} disabled={loading}>
-              Refresh
+              {t('refresh')}
             </button>
           </div>
         </div>
@@ -162,21 +164,20 @@ export function ReportsPage() {
           {reports.map((report) => (
             <div key={report.id} className="row">
               <div className="row__title">
-                Report #{report.id} • {report.status}
+                {t('report', { id: report.id })} • {report.status}
               </div>
               <div className="row__meta">
-                Type: {report.reportableType} #{report.reportableId} • Reason: {report.reason} • Submitted{' '}
-                {formatDate(report.createdAt)}
+                {t('type')}: {report.reportableType} #{report.reportableId} • {t('reason')}: {report.reason} • {t('submittedOn', { date: formatDate(report.createdAt) })}
               </div>
               {report.description ? <p>{report.description}</p> : null}
               {report.listing ? (
                 <div className="row__meta">
-                  Linked listing: #{report.listing.id} ({report.listing.status}) - {report.listing.title}
+                  {t('linkedListing', { id: report.listing.id, status: report.listing.status, title: report.listing.title })}
                 </div>
               ) : null}
             </div>
           ))}
-          {!loading && reports.length === 0 ? <p className="muted-text">No reports found.</p> : null}
+          {!loading && reports.length === 0 ? <p className="muted-text">{t('noReports')}</p> : null}
         </div>
       </section>
     </div>

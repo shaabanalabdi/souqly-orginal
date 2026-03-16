@@ -1,0 +1,28 @@
+﻿
+> souqly-fe@0.0.0 lint
+> eslint .
+
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\AdminPage.tsx
+  2:10  error  'useTranslation' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\ChatPage.tsx
+  161:6  warning  React Hook useEffect has a missing dependency: 't'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\CraftsmanProfilePage.tsx
+  2:10  error  'useTranslation' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\DealsPage.tsx
+  2:10  error  'useTranslation' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\ListingDetailsPage.tsx
+  70:6  warning  React Hook useEffect has a missing dependency: 't'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\PreferencesPage.tsx
+  2:10  error  'useTranslation' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Formation_Professionnelle\DWWM_2024\souqly - Orginal\frontend\src\pages\SubscriptionsPage.tsx
+  2:10  error  'useTranslation' is defined but never used  @typescript-eslint/no-unused-vars
+
+Ô£û 7 problems (5 errors, 2 warnings)
+

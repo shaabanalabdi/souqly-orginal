@@ -71,3 +71,4 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap();
+// Trigger tsx watch reload once more

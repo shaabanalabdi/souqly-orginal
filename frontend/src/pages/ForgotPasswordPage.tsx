@@ -1,9 +1,11 @@
 import { type FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/auth.service';
 import { asHttpError } from '../services/http';
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation('auth');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -16,7 +18,7 @@ export function ForgotPasswordPage() {
     setError(null);
     try {
       await authService.forgotPassword(email);
-      setMessage('If this email exists, a password reset link has been sent.');
+      setMessage(t('resetLinkSent'));
     } catch (err) {
       setError(asHttpError(err).message);
     } finally {
@@ -26,12 +28,12 @@ export function ForgotPasswordPage() {
 
   return (
     <section className="card" style={{ maxWidth: 500, marginInline: 'auto' }}>
-      <h1 className="page-title">Forgot Password</h1>
-      <p className="page-subtitle">Enter your email to request a reset link.</p>
+      <h1 className="page-title">{t('forgotPasswordTitle')}</h1>
+      <p className="page-subtitle">{t('forgotPasswordSubtitle')}</p>
 
       <form className="stack" onSubmit={handleSubmit}>
         <label className="field">
-          <span className="label">Email</span>
+          <span className="label">{t('email')}</span>
           <input
             className="input"
             type="email"
@@ -46,10 +48,10 @@ export function ForgotPasswordPage() {
 
         <div className="button-row">
           <button type="submit" className="button button--primary" disabled={loading}>
-            {loading ? 'Sending...' : 'Send reset link'}
+            {loading ? t('sending') : t('sendResetLink')}
           </button>
           <Link to="/login" className="button button--ghost">
-            Back to login
+            {t('backToLogin')}
           </Link>
         </div>
       </form>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authService } from '../services/auth.service';
@@ -14,6 +15,7 @@ import type {
 import { formatDate, formatMoney } from '../utils/format';
 
 export function PreferencesPage() {
+  const { t } = useTranslation('preferences');
   const user = useAuthStore((state) => state.user);
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const [favorites, setFavorites] = useState<FavoriteSummary[]>([]);
@@ -173,17 +175,17 @@ export function PreferencesPage() {
 
   return (
     <div className="stack">
-      <h1 className="page-title">Preferences</h1>
-      <p className="page-subtitle">Favorites and saved searches with alert frequency.</p>
+      <h1 className="page-title">{t('title')}</h1>
+      <p className="page-subtitle">{t('subtitle')}</p>
 
       {error ? <p className="error-text">{error}</p> : null}
       {message ? <p className="muted-text">{message}</p> : null}
 
       <section className="card">
-        <h2>Phone Verification</h2>
+        <h2>{t('phoneVerification')}</h2>
         <div className="stack">
           <label className="field">
-            <span className="label">Phone Number</span>
+            <span className="label">{t('phoneNumber')}</span>
             <input
               className="input"
               placeholder="+9639XXXXXXXX"
@@ -193,15 +195,13 @@ export function PreferencesPage() {
           </label>
 
           <div className="button-row">
-            <button type="button" className="button button--primary" onClick={handleRequestPhoneOtp}>
-              Request WhatsApp OTP
-            </button>
+            <button type="button" className="button button--primary" onClick={handleRequestPhoneOtp}>{t('requestOtp')}</button>
           </div>
 
           {otpRequested ? (
             <>
               <label className="field">
-                <span className="label">OTP Code</span>
+                <span className="label">{t('otpCode')}</span>
                 <input
                   className="input"
                   placeholder="123456"
@@ -210,24 +210,22 @@ export function PreferencesPage() {
                 />
               </label>
               <div className="button-row">
-                <button type="button" className="button button--secondary" onClick={handleVerifyPhoneOtp}>
-                  Verify Phone
-                </button>
+                <button type="button" className="button button--secondary" onClick={handleVerifyPhoneOtp}>{t('verifyPhone')}</button>
               </div>
             </>
           ) : null}
 
           <p className="muted-text">
-            Current verification status: {user?.phoneVerified ? 'Verified' : 'Not verified'}
+            Current verification status: {user?.phoneVerified ? t('verified') : t('notVerified')}
           </p>
         </div>
       </section>
 
       <section className="card">
-        <h2>Identity Verification</h2>
+        <h2>{t('identityVerification')}</h2>
         <div className="stack">
           <p className="muted-text">
-            Current status: {user?.identityVerificationStatus ?? 'NONE'}
+            Current status: {user?.identityVerificationStatus ?? t('none')}
             {user?.identityVerifiedAt ? ` (verified at ${formatDate(user.identityVerifiedAt)})` : ''}
           </p>
 
@@ -240,26 +238,26 @@ export function PreferencesPage() {
                 : ''}
             </p>
           ) : (
-            <p className="muted-text">No identity request submitted yet.</p>
+            <p className="muted-text">{t('noIdentityRequest')}</p>
           )}
 
           <label className="field">
-            <span className="label">Document Type</span>
+            <span className="label">{t('documentType')}</span>
             <select
               className="select"
               value={identityDocumentType}
               onChange={(event) => setIdentityDocumentType(event.target.value as IdentityDocumentType)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
             >
-              <option value="NATIONAL_ID">NATIONAL_ID</option>
-              <option value="PASSPORT">PASSPORT</option>
-              <option value="DRIVER_LICENSE">DRIVER_LICENSE</option>
-              <option value="OTHER">OTHER</option>
+              <option value="nationalId">{t('nationalId')}</option>
+              <option value="passport">{t('passport')}</option>
+              <option value="driverLicense">{t('driverLicense')}</option>
+              <option value="other">{t('other')}</option>
             </select>
           </label>
 
           <label className="field">
-            <span className="label">Document Number (masked)</span>
+            <span className="label">{t('documentNumber')}</span>
             <input
               className="input"
               placeholder="****1234"
@@ -270,7 +268,7 @@ export function PreferencesPage() {
           </label>
 
           <label className="field">
-            <span className="label">Document Front URL</span>
+            <span className="label">{t('documentFront')}</span>
             <input
               className="input"
               placeholder="https://..."
@@ -281,7 +279,7 @@ export function PreferencesPage() {
           </label>
 
           <label className="field">
-            <span className="label">Document Back URL (optional)</span>
+            <span className="label">{t('documentBack')}</span>
             <input
               className="input"
               placeholder="https://..."
@@ -292,7 +290,7 @@ export function PreferencesPage() {
           </label>
 
           <label className="field">
-            <span className="label">Selfie URL (optional)</span>
+            <span className="label">{t('selfieUrl')}</span>
             <input
               className="input"
               placeholder="https://..."
@@ -303,7 +301,7 @@ export function PreferencesPage() {
           </label>
 
           <label className="field">
-            <span className="label">Note</span>
+            <span className="label">{t('note')}</span>
             <textarea
               className="textarea"
               value={identityNote}
@@ -318,31 +316,25 @@ export function PreferencesPage() {
               className="button button--primary"
               onClick={handleSubmitIdentityVerification}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
-            >
-              Submit Identity Verification
-            </button>
+            >{t('submitIdentity')}</button>
           </div>
         </div>
       </section>
 
       <section className="grid grid--2">
         <div className="card">
-          <h2>Favorites</h2>
+          <h2>{t('favorites')}</h2>
           <div className="inline" style={{ marginBottom: '0.65rem' }}>
             <input
               className="input"
               type="number"
               min={1}
-              placeholder="Listing ID"
+              placeholder={t('listingId')}
               value={favoriteListingId}
               onChange={(event) => setFavoriteListingId(event.target.value)}
             />
-            <button type="button" className="button button--primary" onClick={handleAddFavorite}>
-              Add
-            </button>
-            <button type="button" className="button button--ghost" onClick={loadData} disabled={loading}>
-              Refresh
-            </button>
+            <button type="button" className="button button--primary" onClick={handleAddFavorite}>{t('add')}</button>
+            <button type="button" className="button button--ghost" onClick={loadData} disabled={loading}>{t('refresh')}</button>
           </div>
 
           <div className="list">
@@ -360,25 +352,23 @@ export function PreferencesPage() {
                     type="button"
                     className="button button--danger"
                     onClick={() => handleRemoveFavorite(favorite.listing.id)}
-                  >
-                    Remove
-                  </button>
+                  >{t('remove')}</button>
                 </div>
               </div>
             ))}
-            {!loading && favorites.length === 0 ? <p className="muted-text">No favorites yet.</p> : null}
+            {!loading && favorites.length === 0 ? <p className="muted-text">{t('noFavorites')}</p> : null}
           </div>
         </div>
 
         <div className="card">
-          <h2>Saved Searches</h2>
+          <h2>{t('savedSearches')}</h2>
           <div className="stack" style={{ marginBottom: '0.75rem' }}>
             <label className="field">
-              <span className="label">Name</span>
+              <span className="label">{t('name')}</span>
               <input className="input" value={searchName} onChange={(event) => setSearchName(event.target.value)} />
             </label>
             <label className="field">
-              <span className="label">Filters JSON</span>
+              <span className="label">{t('filtersJson')}</span>
               <textarea
                 className="textarea"
                 value={searchFiltersText}
@@ -386,21 +376,19 @@ export function PreferencesPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Frequency</span>
+              <span className="label">{t('frequency')}</span>
               <select
                 className="select"
                 value={searchFrequency}
                 onChange={(event) => setSearchFrequency(event.target.value as NotificationFrequency)}
               >
-                <option value="instant">instant</option>
-                <option value="daily">daily</option>
-                <option value="weekly">weekly</option>
+                <option value="instant">{t('instant')}</option>
+                <option value="daily">{t('daily')}</option>
+                <option value="weekly">{t('weekly')}</option>
               </select>
             </label>
             <div className="button-row">
-              <button type="button" className="button button--primary" onClick={handleCreateSavedSearch}>
-                Save search
-              </button>
+              <button type="button" className="button button--primary" onClick={handleCreateSavedSearch}>{t('saveSearch')}</button>
             </div>
           </div>
 
@@ -419,13 +407,11 @@ export function PreferencesPage() {
                     type="button"
                     className="button button--danger"
                     onClick={() => handleDeleteSavedSearch(savedSearch.id)}
-                  >
-                    Delete
-                  </button>
+                  >{t('delete')}</button>
                 </div>
               </div>
             ))}
-            {!loading && savedSearches.length === 0 ? <p className="muted-text">No saved searches yet.</p> : null}
+            {!loading && savedSearches.length === 0 ? <p className="muted-text">{t('noSavedSearches')}</p> : null}
           </div>
         </div>
       </section>

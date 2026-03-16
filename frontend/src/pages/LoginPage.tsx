@@ -1,10 +1,13 @@
 import { type FormEvent, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
+  
   const redirect = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get('redirect') ?? '/';
@@ -48,12 +51,12 @@ export function LoginPage() {
 
   return (
     <section className="card" style={{ maxWidth: 480, marginInline: 'auto' }}>
-      <h1 className="page-title">Login</h1>
-      <p className="page-subtitle">Use your verified email and password.</p>
+      <h1 className="page-title">{t('auth.loginTitle')}</h1>
+      <p className="page-subtitle">{t('auth.loginSubtitle')}</p>
 
       <form className="stack" onSubmit={handleSubmit}>
         <label className="field">
-          <span className="label">Email</span>
+          <span className="label">{t('auth.email')}</span>
           <input
             className="input"
             type="email"
@@ -64,7 +67,7 @@ export function LoginPage() {
         </label>
 
         <label className="field">
-          <span className="label">Password</span>
+          <span className="label">{t('auth.password')}</span>
           <input
             className="input"
             type="password"
@@ -78,23 +81,23 @@ export function LoginPage() {
 
         <div className="button-row">
           <button className="button button--primary" type="submit" disabled={isLoading}>
-            {isLoading ? 'Logging in...' : 'Login'}
+            {isLoading ? t('auth.loggingIn') : t('auth.submitLogin')}
           </button>
           <Link className="button button--ghost" to="/forgot-password">
-            Forgot password
+            {t('auth.forgotPassword')}
           </Link>
         </div>
       </form>
 
       <div className="stack" style={{ marginTop: 16 }}>
         <label className="field">
-          <span className="label">OAuth display name (optional)</span>
+          <span className="label">{t('auth.oauthName')}</span>
           <input
             className="input"
             type="text"
             value={oauthFullName}
             onChange={(event) => setOauthFullName(event.target.value)}
-            placeholder="Used in foundation/mock mode"
+            placeholder={t('auth.oauthNamePlaceholder')}
           />
         </label>
 
@@ -105,7 +108,7 @@ export function LoginPage() {
             disabled={isLoading || !email.trim()}
             onClick={handleGoogleOAuth}
           >
-            Continue with Google
+            {t('auth.continueWithGoogle')}
           </button>
           <button
             className="button button--ghost"
@@ -113,13 +116,13 @@ export function LoginPage() {
             disabled={isLoading || !email.trim()}
             onClick={handleFacebookOAuth}
           >
-            Continue with Facebook
+            {t('auth.continueWithFacebook')}
           </button>
         </div>
       </div>
 
       <p className="muted-text">
-        No account? <Link to="/register">Register</Link>
+        {t('auth.noAccount')} <Link to="/register">{t('auth.registerLink')}</Link>
       </p>
     </section>
   );
