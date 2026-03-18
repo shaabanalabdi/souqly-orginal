@@ -15,7 +15,7 @@ function toCardListing(listing: ListingSummary) {
     id: listing.id,
     title: listing.title,
     price: listing.priceAmount ?? 0,
-    currency: listing.currency ?? 'SAR',
+    currency: listing.currency ?? 'USD',
     location: `${listing.country.name} - ${listing.city.name}`,
     imageUrl: listing.coverImage ?? undefined,
     badge: listing.isFeatured ? 'Featured' : undefined,
@@ -188,7 +188,7 @@ export function ListingDetailsPage() {
               <p className="text-3xl font-black text-primary">
                 {new Intl.NumberFormat(locale, {
                   style: 'currency',
-                  currency: listing.currency ?? 'SAR',
+                  currency: listing.currency ?? 'USD',
                   maximumFractionDigits: 0,
                 }).format(listing.priceAmount ?? 0)}
               </p>

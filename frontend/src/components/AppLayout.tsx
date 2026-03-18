@@ -7,6 +7,7 @@ import { setDirection } from '../i18n';
 import { useAuthStore } from '../store/authStore';
 import { marketplaceCountries } from '../pages/marketplaceMockData';
 import { useLocaleSwitch } from '../utils/localeSwitch';
+import { TARGET_MARKET_COUNTRY_CODES } from '../constants/market';
 
 interface QuickLink {
   to: string;
@@ -38,7 +39,11 @@ export function AppLayout() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [searchValue, setSearchValue] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState('SA');
+  const [selectedCountry, setSelectedCountry] = useState<string>(() => {
+    const countryCode = new URLSearchParams(window.location.search).get('countryCode')?.toUpperCase();
+    const isSupported = !!countryCode && marketplaceCountries.some((country) => country.code === countryCode);
+    return isSupported ? countryCode : TARGET_MARKET_COUNTRY_CODES[0];
+  });
 
   const isAdminOrModerator = user?.staffRole === 'ADMIN' || user?.staffRole === 'MODERATOR';
 
@@ -65,11 +70,23 @@ export function AppLayout() {
 
   const onSearchSubmit = () => {
     const trimmed = searchValue.trim();
-    if (!trimmed) {
-      navigate('/search');
-      return;
-    }
-    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+    const params = new URLSearchParams();
+    if (trimmed) params.set('q', trimmed);
+    if (selectedCountry) params.set('countryCode', selectedCountry);
+    params.set('page', '1');
+    navigate(`/search?${params.toString()}`);
+  };
+
+  const onCountryChange = (code: string) => {
+    setSelectedCountry(code);
+    if (!location.pathname.startsWith('/search')) return;
+
+    const params = new URLSearchParams(location.search);
+    params.set('countryCode', code);
+    params.delete('countryId');
+    params.delete('cityId');
+    params.set('page', '1');
+    navigate(`/search?${params.toString()}`);
   };
 
   const hideHeaderAndFooter = location.pathname === '/login' || location.pathname === '/register';
@@ -87,7 +104,7 @@ export function AppLayout() {
               label: pick(country.labelAr, country.labelEn),
             }))}
             selectedCountryCode={selectedCountry}
-            onCountryChange={setSelectedCountry}
+            onCountryChange={onCountryChange}
             language={isArabic ? 'ar' : 'en'}
             onToggleLanguage={onToggleLanguage}
             isAuthenticated={isAuthenticated}

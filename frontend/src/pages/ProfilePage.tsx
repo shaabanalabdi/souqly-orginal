@@ -49,7 +49,7 @@ export function ProfilePage() {
         id: favorite.listing.id,
         title: favorite.listing.title,
         price: favorite.listing.priceAmount ?? 0,
-        currency: favorite.listing.currency ?? 'SAR',
+        currency: favorite.listing.currency ?? 'USD',
         location: `${favorite.listing.countryName} - ${favorite.listing.cityName}`,
         imageUrl: favorite.listing.coverImage ?? undefined,
       })),

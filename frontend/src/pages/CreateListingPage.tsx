@@ -13,6 +13,7 @@ import type {
   Subcategory,
 } from '../types/domain';
 import { useLocaleSwitch } from '../utils/localeSwitch';
+import { filterTargetMarketCountries } from '../constants/market';
 
 type ContactVisibility = 'hidden' | 'visible' | 'approval';
 
@@ -42,7 +43,7 @@ const INITIAL_DRAFT: ListingDraft = {
   subcategoryId: '',
   attributes: {},
   price: '',
-  currency: 'SAR',
+  currency: 'USD',
   condition: 'USED',
   countryId: '',
   cityId: '',
@@ -87,7 +88,7 @@ export function CreateListingPage() {
           geoService.listCountries(),
         ]);
         setCategories(categoriesResult);
-        setCountries(countriesResult);
+        setCountries(filterTargetMarketCountries(countriesResult));
       } catch (error) {
         setStatusMessage(asHttpError(error).message);
       }
@@ -500,7 +501,7 @@ export function CreateListingPage() {
                   value={draft.latitude}
                   onChange={(event) => setDraft((prev) => ({ ...prev, latitude: event.target.value }))}
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                  placeholder="24.7136"
+                  placeholder="33.5138"
                 />
               </label>
               <label className="space-y-2">
@@ -509,7 +510,7 @@ export function CreateListingPage() {
                   value={draft.longitude}
                   onChange={(event) => setDraft((prev) => ({ ...prev, longitude: event.target.value }))}
                   className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
-                  placeholder="46.6753"
+                  placeholder="36.2765"
                 />
               </label>
             </div>
@@ -541,6 +542,34 @@ export function CreateListingPage() {
                   type="radio"
                   checked={draft.phoneVisibility === 'approval'}
                   onChange={() => setDraft((prev) => ({ ...prev, phoneVisibility: 'approval' }))}
+                />
+                {pick('بعد الموافقة', 'After Approval')}
+              </label>
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-ink">{pick('إظهار واتساب', 'WhatsApp visibility')}</legend>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.whatsappVisibility === 'hidden'}
+                  onChange={() => setDraft((prev) => ({ ...prev, whatsappVisibility: 'hidden' }))}
+                />
+                {pick('مخفي', 'Hidden')}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.whatsappVisibility === 'visible'}
+                  onChange={() => setDraft((prev) => ({ ...prev, whatsappVisibility: 'visible' }))}
+                />
+                {pick('ظاهر', 'Visible')}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.whatsappVisibility === 'approval'}
+                  onChange={() => setDraft((prev) => ({ ...prev, whatsappVisibility: 'approval' }))}
                 />
                 {pick('بعد الموافقة', 'After Approval')}
               </label>

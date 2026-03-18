@@ -72,7 +72,7 @@ export function ListingCard({
   id,
   title,
   price,
-  currency = 'SAR',
+  currency = 'USD',
   location,
   imageUrl,
   badge,

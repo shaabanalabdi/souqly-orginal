@@ -7,6 +7,8 @@ import { useLocaleSwitch } from '../utils/localeSwitch';
 
 export function CraftsmanPage() {
   const { pick } = useLocaleSwitch();
+  const publicPhone = '+963 944 000 000';
+  const whatsappPhone = '963944000000';
   const [profile, setProfile] = useState<CraftsmanProfileDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -63,10 +65,10 @@ export function CraftsmanPage() {
             }`}>
               {profile.availableNow ? pick('متاح الآن', 'Available now') : pick('غير متاح الآن', 'Unavailable now')}
             </span>
-            <a href="tel:+0000000000" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-ink hover:bg-slate-50">
-              {pick('الهاتف متاح بعد الموافقة', 'Phone available after approval')}
+            <a href={`tel:${publicPhone}`} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-ink hover:bg-slate-50">
+              {pick('الهاتف', 'Phone')}: {publicPhone}
             </a>
-            <a href="https://wa.me" className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-emerald-700">
+            <a href={`https://wa.me/${whatsappPhone}`} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-emerald-700">
               WhatsApp
             </a>
           </div>

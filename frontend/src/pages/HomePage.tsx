@@ -15,7 +15,7 @@ function normalizeListing(listing: ListingSummary) {
     id: listing.id,
     title: listing.title,
     price: listing.priceAmount ?? 0,
-    currency: listing.currency ?? 'SAR',
+    currency: listing.currency ?? 'USD',
     location: `${listing.country.name} - ${listing.city.name}`,
     imageUrl: listing.coverImage ?? undefined,
     badge: listing.isFeatured ? 'Featured' : undefined,
