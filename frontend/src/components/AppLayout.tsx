@@ -1,298 +1,148 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Header } from './Header';
+import { Footer } from './Footer';
 import { setDirection } from '../i18n';
 import { useAuthStore } from '../store/authStore';
-import { chatsService } from '../services/chats.service';
-import {
-  connectChatSocket,
-  disconnectChatSocket,
-  onMessageCreated,
-  onOfferUpdated,
-  onPlatformNotification,
-  onThreadCreated,
-} from '../services/socket';
-import { useChatMetaStore } from '../store/chatMetaStore';
-import { useNotificationStore } from '../store/notificationStore';
-import { formatDate } from '../utils/format';
+import { marketplaceCountries } from '../pages/marketplaceMockData';
+import { useLocaleSwitch } from '../utils/localeSwitch';
 
-const baseLinks = [
-  { to: '/', label: 'nav.browse' },
-  { to: '/terms', label: 'nav.terms' },
-  { to: '/privacy', label: 'nav.privacy' },
-  { to: '/listings/create', label: 'nav.postListing', auth: true },
-  { to: '/chats', label: 'nav.chats', auth: true },
-  { to: '/deals', label: 'nav.deals', auth: true },
-  { to: '/preferences', label: 'nav.preferences', auth: true },
-  { to: '/subscriptions', label: 'nav.subscriptions', auth: true },
-  { to: '/business-profile', label: 'nav.businessProfile', auth: true },
-  { to: '/craftsman-profile', label: 'nav.craftsmanProfile', auth: true },
-  { to: '/reports', label: 'nav.reports', auth: true },
-  { to: '/admin', label: 'nav.admin', auth: true, admin: true },
+interface QuickLink {
+  to: string;
+  labelAr: string;
+  labelEn: string;
+  auth?: boolean;
+  admin?: boolean;
+}
+
+const quickLinks: QuickLink[] = [
+  { to: '/', labelAr: 'الرئيسية', labelEn: 'Home' },
+  { to: '/search', labelAr: 'البحث', labelEn: 'Search' },
+  { to: '/store', labelAr: 'المتجر', labelEn: 'Store' },
+  { to: '/craftsman', labelAr: 'الحرفيين', labelEn: 'Craftsmen' },
+  { to: '/listings/create', labelAr: 'إضافة إعلان', labelEn: 'Post Listing', auth: true },
+  { to: '/chats', labelAr: 'المحادثات', labelEn: 'Chats', auth: true },
+  { to: '/profile', labelAr: 'الملف الشخصي', labelEn: 'Profile', auth: true },
+  { to: '/dashboard', labelAr: 'لوحة التحكم', labelEn: 'Dashboard', auth: true },
+  { to: '/admin', labelAr: 'الإدارة', labelEn: 'Admin', auth: true, admin: true },
 ];
 
 export function AppLayout() {
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation();
-  const user = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const location = useLocation();
+  const { i18n } = useTranslation();
+  const { isArabic, pick } = useLocaleSwitch();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const logout = useAuthStore((state) => state.logout);
   const isLoading = useAuthStore((state) => state.isLoading);
-  const unreadCount = useChatMetaStore((state) => state.unreadCount);
-  const setUnreadCount = useChatMetaStore((state) => state.setUnreadCount);
-  const notifications = useNotificationStore((state) => state.items);
-  const addNotification = useNotificationStore((state) => state.addNotification);
-  const markAsRead = useNotificationStore((state) => state.markAsRead);
-  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
-  const clearNotifications = useNotificationStore((state) => state.clearNotifications);
-  const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const toastSeq = useRef(1);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const [searchValue, setSearchValue] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('SA');
 
-  const isArabic = i18n.resolvedLanguage?.startsWith('ar') ?? i18n.language === 'ar';
-  const isAdminOrModerator =
-    user?.staffRole === 'ADMIN'
-    || user?.staffRole === 'MODERATOR';
-  const unreadNotificationsCount = useMemo(
-    () => notifications.reduce((count, item) => count + (item.read ? 0 : 1), 0),
-    [notifications],
+  const isAdminOrModerator = user?.staffRole === 'ADMIN' || user?.staffRole === 'MODERATOR';
+
+  const visibleLinks = useMemo(
+    () =>
+      quickLinks.filter((link) => {
+        if (link.auth && !isAuthenticated) return false;
+        if (link.admin && !isAdminOrModerator) return false;
+        return true;
+      }),
+    [isAdminOrModerator, isAuthenticated],
   );
 
-  const pushToast = useCallback((text: string) => {
-    const id = toastSeq.current++;
-    setToasts((prev) => [...prev, { id, text }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
-    }, 3500);
-  }, []);
-
-  const loadUnreadCount = useCallback(async () => {
-    if (!isAuthenticated) {
-      setUnreadCount(0);
-      return;
-    }
-
-    try {
-      const result = await chatsService.unreadCount();
-      setUnreadCount(result.unreadCount);
-    } catch {
-      // ignore background errors in navbar unread polling
-    }
-  }, [isAuthenticated, setUnreadCount]);
-
-  const toggleLanguage = () => {
+  const onToggleLanguage = () => {
     const nextLang = isArabic ? 'en' : 'ar';
     void i18n.changeLanguage(nextLang);
     setDirection(nextLang);
   };
 
-  const handleLogout = async () => {
+  const onLogout = async () => {
     await logout();
-    clearNotifications();
-    setUnreadCount(0);
     navigate('/');
   };
 
-  useEffect(() => {
-    if (!isAuthenticated || !accessToken || !user?.id) {
-      disconnectChatSocket();
-      setUnreadCount(0);
+  const onSearchSubmit = () => {
+    const trimmed = searchValue.trim();
+    if (!trimmed) {
+      navigate('/search');
       return;
     }
+    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+  };
 
-    connectChatSocket(accessToken);
-    void loadUnreadCount();
-
-    const unsubscribeThreadCreated = onThreadCreated(() => {
-      addNotification({
-        kind: 'thread_created',
-        title: t('notifications.newConversation'),
-        body: t('notifications.newThreadOpened'),
-      });
-      void loadUnreadCount();
-    });
-
-    const unsubscribeMessageCreated = onMessageCreated((payload) => {
-      if (payload.message.senderId !== user.id) {
-        pushToast(t('notifications.newMsgInThread', { id: payload.threadId }));
-        addNotification({
-          kind: 'chat_message',
-          title: `Thread #${payload.threadId}`,
-          body: payload.message.content || payload.message.imageUrl || 'New message',
-          threadId: payload.threadId,
-        });
-      }
-      void loadUnreadCount();
-    });
-
-    const unsubscribeOfferUpdated = onOfferUpdated((payload) => {
-      if (payload.offer.senderId !== user.id) {
-        pushToast(t('notifications.offerUpdate', { id: payload.threadId }));
-        addNotification({
-          kind: 'offer_update',
-          title: t('notifications.offerUpdate', { id: payload.threadId }),
-          body: t('notifications.offerNow', { id: payload.offer.id, status: payload.offer.status }),
-          threadId: payload.threadId,
-        });
-      }
-      void loadUnreadCount();
-    });
-
-    const unsubscribePlatformNotification = onPlatformNotification((payload) => {
-      pushToast(payload.title);
-      addNotification({
-        kind: payload.kind,
-        title: payload.title,
-        body: payload.body,
-        threadId: payload.threadId,
-        link: payload.link,
-        createdAt: payload.createdAt,
-      });
-    });
-
-    return () => {
-      unsubscribeThreadCreated();
-      unsubscribeMessageCreated();
-      unsubscribeOfferUpdated();
-      unsubscribePlatformNotification();
-      disconnectChatSocket();
-    };
-  }, [
-    accessToken,
-    addNotification,
-    isAuthenticated,
-    loadUnreadCount,
-    pushToast,
-    setUnreadCount,
-    user?.id,
-    t,
-  ]);
+  const hideHeaderAndFooter = location.pathname === '/login' || location.pathname === '/register';
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="container topbar__inner">
-          <Link to="/" className="brand">
-            {t('common.appName')}
-          </Link>
+    <div className="flex min-h-screen flex-col bg-surface">
+      {!hideHeaderAndFooter ? (
+        <>
+          <Header
+            searchValue={searchValue}
+            onSearchChange={setSearchValue}
+            onSearchSubmit={onSearchSubmit}
+            countries={marketplaceCountries.map((country) => ({
+              code: country.code,
+              label: pick(country.labelAr, country.labelEn),
+            }))}
+            selectedCountryCode={selectedCountry}
+            onCountryChange={setSelectedCountry}
+            language={isArabic ? 'ar' : 'en'}
+            onToggleLanguage={onToggleLanguage}
+            isAuthenticated={isAuthenticated}
+            userName={user?.fullName ?? user?.email ?? undefined}
+            onProfile={() => navigate('/profile')}
+            onLogin={() => navigate('/login')}
+            onRegister={() => navigate('/register')}
+            onLogout={onLogout}
+            labels={{
+              searchPlaceholder: pick('ابحث عن سيارات، عقارات، خدمات...', 'Search cars, real estate, services...'),
+              searchButton: pick('بحث', 'Search'),
+              countryLabel: pick('الدولة', 'Country'),
+              login: pick('دخول', 'Login'),
+              register: pick('حساب جديد', 'Register'),
+              profile: pick('الملف الشخصي', 'Profile'),
+              logout: isLoading ? pick('جارٍ الخروج...', 'Logging out...') : pick('خروج', 'Logout'),
+            }}
+          />
 
-          <nav className="nav-links">
-            {baseLinks.map((link) => {
-              if (link.auth && !isAuthenticated) return null;
-              if (link.admin && !isAdminOrModerator) return null;
-
-              return (
+          <nav className="border-b border-slate-200 bg-white">
+            <div className="mx-auto flex w-full max-w-7xl items-center gap-2 overflow-x-auto px-4 py-2">
+              {visibleLinks.map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
-                  className={({ isActive }) => (isActive ? 'nav-link nav-link--active' : 'nav-link')}
+                  className={({ isActive }) =>
+                    `whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                      isActive ? 'bg-primary text-white' : 'text-ink hover:bg-slate-100'
+                    }`
+                  }
                 >
-                  {t(link.label)}
-                  {link.to === '/chats' && unreadCount > 0 ? (
-                    <span className="nav-counter">{unreadCount > 99 ? '99+' : unreadCount}</span>
-                  ) : null}
+                  {pick(link.labelAr, link.labelEn)}
                 </NavLink>
-              );
-            })}
+              ))}
+            </div>
           </nav>
+        </>
+      ) : null}
 
-          <div className="topbar__actions">
-            {isAuthenticated ? (
-              <button
-                type="button"
-                className="button button--ghost notification-btn"
-                onClick={() => setNotificationsOpen((open) => !open)}
-              >
-                {t('nav.notifications')}
-                {unreadNotificationsCount > 0 ? (
-                  <span className="nav-counter">
-                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-            {user ? (
-              <span className="badge badge--muted">
-                {user.fullName ?? user.email ?? `User #${user.id}`} ({user.accountType} / {user.staffRole})
-              </span>
-            ) : null}
-            <button type="button" className="button button--ghost" onClick={toggleLanguage}>
-              {isArabic ? t('common.switchToEnglish') : t('common.switchToArabic')}
-            </button>
-            {!isAuthenticated ? (
-              <>
-                <Link to="/login" className="button button--ghost">
-                  {t('nav.login')}
-                </Link>
-                <Link to="/register" className="button button--primary">
-                  {t('nav.register')}
-                </Link>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="button button--danger"
-                onClick={handleLogout}
-                disabled={isLoading}
-              >
-                {t('nav.logout')}
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="container page">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
         <Outlet />
       </main>
 
-      {notificationsOpen ? (
-        <section className="notification-panel card">
-          <div className="card__header">
-            <h3>{t('notifications.title')}</h3>
-            <div className="button-row">
-              <button type="button" className="button button--ghost" onClick={markAllAsRead}>
-                {t('notifications.markAllRead')}
-              </button>
-              <button type="button" className="button button--ghost" onClick={clearNotifications}>
-                {t('notifications.clear')}
-              </button>
-            </div>
-          </div>
-          <div className="list">
-            {notifications.map((notification) => (
-              <button
-                key={notification.id}
-                type="button"
-                className={notification.read ? 'notification-item' : 'notification-item notification-item--unread'}
-                onClick={() => {
-                  markAsRead(notification.id);
-                  setNotificationsOpen(false);
-                  if (notification.threadId) {
-                    navigate(`/chats?thread=${notification.threadId}`);
-                  } else if (notification.link) {
-                    navigate(notification.link);
-                  }
-                }}
-              >
-                <div className="row__title">{notification.title}</div>
-                <div className="row__meta">{notification.body}</div>
-                <div className="row__meta">{formatDate(notification.createdAt)}</div>
-              </button>
-            ))}
-            {notifications.length === 0 ? <p className="muted-text">{t('notifications.noNotifications')}</p> : null}
-          </div>
-        </section>
+      {!hideHeaderAndFooter ? (
+        <Footer
+          links={[
+            { href: '/search', label: pick('تصفح الإعلانات', 'Browse Listings') },
+            { href: '/store', label: pick('المتجر', 'Store') },
+            { href: '/terms', label: pick('الشروط', 'Terms') },
+            { href: '/privacy', label: pick('الخصوصية', 'Privacy') },
+            { href: '/craftsman', label: pick('الحرفيون', 'Craftsmen') },
+          ]}
+          copyrightText={pick('جميع الحقوق محفوظة.', 'All rights reserved.')}
+        />
       ) : null}
-
-      <div className="toast-stack">
-        {toasts.map((toast) => (
-          <div key={toast.id} className="toast">
-            {toast.text}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

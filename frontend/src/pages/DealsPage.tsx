@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { dealsService } from '../services/deals.service';
 import { asHttpError } from '../services/http';
+import { useAuthStore } from '../store/authStore';
 import type { DealStatus, DealSummary } from '../types/domain';
 import { formatDate, formatMoney } from '../utils/format';
-import { useAuthStore } from '../store/authStore';
+import { translateBoolean, translateEnum } from '../utils/i18n';
 
 type DealFilter = '' | DealStatus;
 
 export function DealsPage() {
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const isAdminOrModerator =
     user?.staffRole === 'ADMIN'
@@ -57,7 +60,7 @@ export function DealsPage() {
         currency: currency.trim().toUpperCase() || undefined,
         quantity: quantity ? Number(quantity) : 1,
       });
-      setMessage(`Deal #${created.id} created from offer #${parsedOfferId}.`);
+      setMessage(t('deals.dealCreatedMsg', { dealId: created.id, offerId: parsedOfferId }));
       setOfferId('');
       setFinalPrice('');
       setCurrency('');
@@ -72,7 +75,12 @@ export function DealsPage() {
     setMessage(null);
     try {
       const confirmed = await dealsService.confirmDeal(dealId);
-      setMessage(`Deal #${confirmed.id} updated to ${confirmed.status}.`);
+      setMessage(
+        t('deals.dealConfirmedMsg', {
+          dealId: confirmed.id,
+          status: translateEnum(t, 'dealStatus', confirmed.status),
+        }),
+      );
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -91,7 +99,7 @@ export function DealsPage() {
         rating: parsedRating,
         comment: comment || undefined,
       });
-      setMessage(`Review #${review.id} submitted.`);
+      setMessage(t('deals.reviewSubmittedMsg', { reviewId: review.id }));
       setReviewDealId('');
       setRating('5');
       setComment('');
@@ -105,7 +113,7 @@ export function DealsPage() {
     setMessage(null);
     try {
       const updated = await dealsService.holdEscrow(dealId);
-      setMessage(`Escrow held for deal #${updated.id}.`);
+      setMessage(t('deals.escrowHeldMsg', { dealId: updated.id }));
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -116,7 +124,7 @@ export function DealsPage() {
     setMessage(null);
     try {
       const updated = await dealsService.releaseEscrow(dealId);
-      setMessage(`Escrow released for deal #${updated.id}.`);
+      setMessage(t('deals.escrowReleasedMsg', { dealId: updated.id }));
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -127,7 +135,7 @@ export function DealsPage() {
     setMessage(null);
     try {
       const updated = await dealsService.refundEscrow(dealId);
-      setMessage(`Escrow refunded for deal #${updated.id}.`);
+      setMessage(t('deals.escrowRefundedMsg', { dealId: updated.id }));
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -135,17 +143,16 @@ export function DealsPage() {
   };
 
   const handleOpenDispute = async (dealId: number) => {
-    const reason = window.prompt('Dispute reason (short):', 'Item condition mismatch')?.trim();
+    const reason = window.prompt(t('deals.disputeReasonPrompt'), t('deals.disputeReasonDefault'))?.trim();
     if (!reason) return;
-    const description = window
-      .prompt('Dispute details:', 'Please provide full dispute details here.')
-      ?.trim();
+
+    const description = window.prompt(t('deals.disputeDetailsPrompt'), t('deals.disputeDetailsDefault'))?.trim();
     if (!description) return;
 
     setMessage(null);
     try {
       const result = await dealsService.openDispute(dealId, { reason, description });
-      setMessage(`Dispute #${result.dispute.id} opened for deal #${result.deal.id}.`);
+      setMessage(t('deals.disputeOpenedMsg', { disputeId: result.dispute.id, dealId: result.deal.id }));
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -153,11 +160,16 @@ export function DealsPage() {
   };
 
   const handleReviewDispute = async (dealId: number) => {
-    const note = window.prompt('Review note (optional):', 'Moderator is reviewing this dispute.')?.trim();
+    const note = window.prompt(t('deals.reviewNotePrompt'), t('deals.reviewNoteDefault'))?.trim();
     setMessage(null);
     try {
       const result = await dealsService.reviewDispute(dealId, { note: note || undefined });
-      setMessage(`Dispute #${result.dispute.id} moved to ${result.dispute.status}.`);
+      setMessage(
+        t('deals.disputeReviewedMsg', {
+          disputeId: result.dispute.id,
+          status: translateEnum(t, 'disputeStatus', result.dispute.status),
+        }),
+      );
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -168,14 +180,19 @@ export function DealsPage() {
     dealId: number,
     action: 'release_escrow' | 'refund_escrow' | 'close_no_escrow',
   ) => {
-    const resolution = window.prompt('Resolution note (optional):', 'Resolved by moderation decision.')?.trim();
+    const resolution = window.prompt(t('deals.resolutionNotePrompt'), t('deals.resolutionNoteDefault'))?.trim();
     setMessage(null);
     try {
       const result = await dealsService.resolveDispute(dealId, {
         action,
         resolution: resolution || undefined,
       });
-      setMessage(`Dispute #${result.dispute.id} resolved with action ${action}.`);
+      setMessage(
+        t('deals.disputeResolvedMsg', {
+          disputeId: result.dispute.id,
+          action: translateEnum(t, 'disputeResolutionAction', action),
+        }),
+      );
       await loadDeals();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -184,27 +201,27 @@ export function DealsPage() {
 
   return (
     <div className="stack">
-      <h1 className="page-title">Deals</h1>
-      <p className="page-subtitle">Create deal from accepted offer, confirm, and submit reviews.</p>
+      <h1 className="page-title">{t('deals.title')}</h1>
+      <p className="page-subtitle">{t('deals.subtitle')}</p>
 
       <section className="card">
         <div className="card__header">
-          <h2>My deals</h2>
+          <h2>{t('deals.myDeals')}</h2>
           <div className="inline">
             <select
               className="select"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as DealFilter)}
             >
-              <option value="">All statuses</option>
-              <option value="PENDING">PENDING</option>
-              <option value="CONFIRMED">CONFIRMED</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="CANCELLED">CANCELLED</option>
-              <option value="DISPUTED">DISPUTED</option>
+              <option value="">{t('deals.allStatuses')}</option>
+              <option value="PENDING">{translateEnum(t, 'dealStatus', 'PENDING')}</option>
+              <option value="CONFIRMED">{translateEnum(t, 'dealStatus', 'CONFIRMED')}</option>
+              <option value="COMPLETED">{translateEnum(t, 'dealStatus', 'COMPLETED')}</option>
+              <option value="CANCELLED">{translateEnum(t, 'dealStatus', 'CANCELLED')}</option>
+              <option value="DISPUTED">{translateEnum(t, 'dealStatus', 'DISPUTED')}</option>
             </select>
             <button type="button" className="button button--secondary" onClick={loadDeals} disabled={loading}>
-              Refresh
+              {t('deals.refresh')}
             </button>
           </div>
         </div>
@@ -216,18 +233,18 @@ export function DealsPage() {
           {deals.map((deal) => (
             <div key={deal.id} className="row">
               <div className="row__title">
-                Deal #{deal.id} • {deal.status}
+                {t('deals.deal', { id: deal.id })} • {translateEnum(t, 'dealStatus', deal.status)}
               </div>
               <div className="row__meta">
-                Listing: {deal.listing.title} • {formatMoney(deal.finalPrice, deal.currency)} • Qty {deal.quantity} •
-                {` `}Created {formatDate(deal.createdAt)}
+                {t('deals.listing', { title: deal.listing.title })} • {formatMoney(deal.finalPrice, deal.currency)} •{' '}
+                {t('deals.qty')} {deal.quantity} • {t('deals.created')} {formatDate(deal.createdAt)}
               </div>
               <div className="row__meta">
-                Buyer confirmed: {deal.buyerConfirmed ? 'Yes' : 'No'} • Seller confirmed:{' '}
-                {deal.sellerConfirmed ? 'Yes' : 'No'}
+                {t('deals.buyerConfirmed')} {translateBoolean(t, deal.buyerConfirmed)} • {t('deals.sellerConfirmed')}{' '}
+                {translateBoolean(t, deal.sellerConfirmed)}
               </div>
               <div className="row__meta">
-                Escrow: {deal.escrow.status}
+                {t('deals.escrow')} {translateEnum(t, 'escrowStatus', deal.escrow.status)}
                 {deal.escrow.amount !== null && deal.escrow.currency ? (
                   <> • {formatMoney(deal.escrow.amount, deal.escrow.currency)}</>
                 ) : null}
@@ -239,7 +256,7 @@ export function DealsPage() {
                   onClick={() => handleConfirmDeal(deal.id)}
                   disabled={deal.status === 'COMPLETED' || deal.status === 'CANCELLED' || deal.status === 'DISPUTED'}
                 >
-                  Confirm deal
+                  {t('deals.confirmDeal')}
                 </button>
                 <button
                   type="button"
@@ -247,7 +264,7 @@ export function DealsPage() {
                   onClick={() => handleHoldEscrow(deal.id)}
                   disabled={deal.escrow.status !== 'NONE' || deal.status === 'CANCELLED' || deal.status === 'DISPUTED'}
                 >
-                  Hold escrow
+                  {t('deals.holdEscrow')}
                 </button>
                 <button
                   type="button"
@@ -255,7 +272,7 @@ export function DealsPage() {
                   onClick={() => handleReleaseEscrow(deal.id)}
                   disabled={deal.escrow.status !== 'HELD' || deal.status === 'DISPUTED'}
                 >
-                  Release escrow
+                  {t('deals.releaseEscrow')}
                 </button>
                 {isAdminOrModerator ? (
                   <button
@@ -264,7 +281,7 @@ export function DealsPage() {
                     onClick={() => handleRefundEscrow(deal.id)}
                     disabled={deal.escrow.status !== 'HELD'}
                   >
-                    Refund escrow
+                    {t('deals.refundEscrow')}
                   </button>
                 ) : null}
                 <button
@@ -273,7 +290,7 @@ export function DealsPage() {
                   onClick={() => handleOpenDispute(deal.id)}
                   disabled={deal.status === 'CANCELLED' || deal.status === 'DISPUTED'}
                 >
-                  Open dispute
+                  {t('deals.openDispute')}
                 </button>
                 {isAdminOrModerator && deal.status === 'DISPUTED' ? (
                   <button
@@ -281,7 +298,7 @@ export function DealsPage() {
                     className="button button--secondary"
                     onClick={() => handleReviewDispute(deal.id)}
                   >
-                    Review dispute
+                    {t('deals.reviewDispute')}
                   </button>
                 ) : null}
                 {isAdminOrModerator && deal.status === 'DISPUTED' ? (
@@ -290,7 +307,7 @@ export function DealsPage() {
                     className="button button--primary"
                     onClick={() => handleResolveDispute(deal.id, 'release_escrow')}
                   >
-                    Resolve: Release
+                    {t('deals.resolveRelease')}
                   </button>
                 ) : null}
                 {isAdminOrModerator && deal.status === 'DISPUTED' ? (
@@ -299,7 +316,7 @@ export function DealsPage() {
                     className="button button--danger"
                     onClick={() => handleResolveDispute(deal.id, 'refund_escrow')}
                   >
-                    Resolve: Refund
+                    {t('deals.resolveRefund')}
                   </button>
                 ) : null}
                 {isAdminOrModerator && deal.status === 'DISPUTED' ? (
@@ -308,26 +325,26 @@ export function DealsPage() {
                     className="button button--ghost"
                     onClick={() => handleResolveDispute(deal.id, 'close_no_escrow')}
                   >
-                    Resolve: Close
+                    {t('deals.resolveClose')}
                   </button>
                 ) : null}
               </div>
             </div>
           ))}
-          {!loading && deals.length === 0 ? <p className="muted-text">No deals found.</p> : null}
+          {!loading && deals.length === 0 ? <p className="muted-text">{t('deals.noDealsFound')}</p> : null}
         </div>
       </section>
 
       <section className="grid grid--2">
         <div className="card">
-          <h2>Create Deal From Offer</h2>
+          <h2>{t('deals.createDealFromOffer')}</h2>
           <div className="stack">
             <label className="field">
-              <span className="label">Offer ID</span>
+              <span className="label">{t('deals.offerId')}</span>
               <input className="input" type="number" min={1} value={offerId} onChange={(event) => setOfferId(event.target.value)} />
             </label>
             <label className="field">
-              <span className="label">Final price (optional)</span>
+              <span className="label">{t('deals.finalPriceOptional')}</span>
               <input
                 className="input"
                 type="number"
@@ -337,11 +354,11 @@ export function DealsPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Currency (optional)</span>
+              <span className="label">{t('deals.currencyOptional')}</span>
               <input className="input" value={currency} onChange={(event) => setCurrency(event.target.value)} />
             </label>
             <label className="field">
-              <span className="label">Quantity</span>
+              <span className="label">{t('deals.quantity')}</span>
               <input
                 className="input"
                 type="number"
@@ -351,16 +368,16 @@ export function DealsPage() {
               />
             </label>
             <button type="button" className="button button--warning" onClick={handleCreateFromOffer}>
-              Create deal
+              {t('deals.createDeal')}
             </button>
           </div>
         </div>
 
         <div className="card">
-          <h2>Submit Review</h2>
+          <h2>{t('deals.submitReview')}</h2>
           <div className="stack">
             <label className="field">
-              <span className="label">Deal ID</span>
+              <span className="label">{t('deals.dealId')}</span>
               <input
                 className="input"
                 type="number"
@@ -370,15 +387,15 @@ export function DealsPage() {
               />
             </label>
             <label className="field">
-              <span className="label">Rating (1-5)</span>
+              <span className="label">{t('deals.rating')}</span>
               <input className="input" type="number" min={1} max={5} value={rating} onChange={(event) => setRating(event.target.value)} />
             </label>
             <label className="field">
-              <span className="label">Comment</span>
+              <span className="label">{t('deals.comment')}</span>
               <input className="input" value={comment} onChange={(event) => setComment(event.target.value)} />
             </label>
             <button type="button" className="button button--secondary" onClick={handleCreateReview}>
-              Submit review
+              {t('deals.submitReview')}
             </button>
           </div>
         </div>

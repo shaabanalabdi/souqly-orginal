@@ -23,9 +23,12 @@ export function RegisterPage() {
     clearError();
     setSuccessMessage(null);
     setResendMessage(null);
-
-    const result = await register({ email, password, fullName });
-    setSuccessMessage(t('auth.registerSuccessMsg', { email: result.email }));
+    try {
+      const result = await register({ email, password, fullName });
+      setSuccessMessage(t('auth.registerSuccessMsg', { email: result.email }));
+    } catch {
+      // error state is already handled in auth store
+    }
   };
 
   const handleResend = async () => {

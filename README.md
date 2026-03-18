@@ -32,6 +32,15 @@ For current cleanup/validation baseline, see `REPO_STATUS.md`.
 
 ## Quick Start
 
+### Docker Stack (Recommended)
+
+```bash
+docker compose up -d --build
+```
+
+App URL: `http://localhost`  
+API URL: `http://localhost/api/v1`
+
 ### 1) Infrastructure
 
 ```bash

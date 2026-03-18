@@ -13,6 +13,7 @@ import type {
   SavedSearch,
 } from '../types/domain';
 import { formatDate, formatMoney } from '../utils/format';
+import { translateEnum } from '../utils/i18n';
 
 export function PreferencesPage() {
   const { t } = useTranslation('preferences');
@@ -74,7 +75,7 @@ export function PreferencesPage() {
     try {
       await preferencesService.addFavorite(listingId);
       setFavoriteListingId('');
-      setMessage('Favorite added.');
+      setMessage(t('favoriteAdded'));
       await loadData();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -85,7 +86,7 @@ export function PreferencesPage() {
     setMessage(null);
     try {
       await preferencesService.removeFavorite(listingId);
-      setMessage('Favorite removed.');
+      setMessage(t('favoriteRemoved'));
       await loadData();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -102,7 +103,7 @@ export function PreferencesPage() {
         notificationFrequency: searchFrequency,
       });
       setSearchName('');
-      setMessage('Saved search created.');
+      setMessage(t('savedSearchCreated'));
       await loadData();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -113,7 +114,7 @@ export function PreferencesPage() {
     setMessage(null);
     try {
       await preferencesService.deleteSavedSearch(id);
-      setMessage('Saved search deleted.');
+      setMessage(t('savedSearchDeleted'));
       await loadData();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -127,7 +128,7 @@ export function PreferencesPage() {
     try {
       const result = await authService.requestPhoneVerification(phone.trim());
       setOtpRequested(true);
-      setMessage(`Verification code sent via ${result.channel}. Expires in ${result.expiresInSeconds} seconds.`);
+      setMessage(t('verificationCodeSent', { channel: result.channel, seconds: result.expiresInSeconds }));
     } catch (err) {
       setMessage(asHttpError(err).message);
     }
@@ -144,7 +145,7 @@ export function PreferencesPage() {
       });
       setOtpCode('');
       setOtpRequested(false);
-      setMessage(`Phone ${result.phone} verified successfully.`);
+      setMessage(t('phoneVerifiedSuccess', { phone: result.phone }));
       await refreshUser();
     } catch (err) {
       setMessage(asHttpError(err).message);
@@ -164,7 +165,7 @@ export function PreferencesPage() {
         selfieUrl: identitySelfieUrl.trim() || undefined,
         note: identityNote.trim() || undefined,
       });
-      setMessage('Identity verification request submitted successfully.');
+      setMessage(t('identitySubmitted'));
       setIdentityNote('');
       await refreshUser();
       await loadData();
@@ -188,7 +189,7 @@ export function PreferencesPage() {
             <span className="label">{t('phoneNumber')}</span>
             <input
               className="input"
-              placeholder="+9639XXXXXXXX"
+              placeholder={t('phonePlaceholder')}
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
             />
@@ -204,7 +205,7 @@ export function PreferencesPage() {
                 <span className="label">{t('otpCode')}</span>
                 <input
                   className="input"
-                  placeholder="123456"
+                  placeholder={t('otpPlaceholder')}
                   value={otpCode}
                   onChange={(event) => setOtpCode(event.target.value)}
                 />
@@ -216,7 +217,7 @@ export function PreferencesPage() {
           ) : null}
 
           <p className="muted-text">
-            Current verification status: {user?.phoneVerified ? t('verified') : t('notVerified')}
+            {t('verificationStatus', { status: user?.phoneVerified ? t('verified') : t('notVerified') })}
           </p>
         </div>
       </section>
@@ -225,16 +226,22 @@ export function PreferencesPage() {
         <h2>{t('identityVerification')}</h2>
         <div className="stack">
           <p className="muted-text">
-            Current status: {user?.identityVerificationStatus ?? t('none')}
-            {user?.identityVerifiedAt ? ` (verified at ${formatDate(user.identityVerifiedAt)})` : ''}
+            {t('currentStatus', {
+              status: user?.identityVerificationStatus
+                ? translateEnum(t, 'identityVerificationStatus', user.identityVerificationStatus)
+                : t('none'),
+            })}
+            {user?.identityVerifiedAt ? ` ${t('verifiedAt', { date: formatDate(user.identityVerifiedAt) })}` : ''}
           </p>
 
           {identityVerification?.currentRequest ? (
             <p className="muted-text">
-              Latest request: {identityVerification.currentRequest.documentType} - submitted{' '}
-              {formatDate(identityVerification.currentRequest.submittedAt)}
+              {t('latestRequest', {
+                type: translateEnum(t, 'identityDocumentType', identityVerification.currentRequest.documentType),
+                submittedDate: formatDate(identityVerification.currentRequest.submittedAt),
+              })}
               {identityVerification.currentRequest.reviewedAt
-                ? ` - reviewed ${formatDate(identityVerification.currentRequest.reviewedAt)}`
+                ? ` ${t('reviewed', { date: formatDate(identityVerification.currentRequest.reviewedAt) })}`
                 : ''}
             </p>
           ) : (
@@ -249,10 +256,10 @@ export function PreferencesPage() {
               onChange={(event) => setIdentityDocumentType(event.target.value as IdentityDocumentType)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
             >
-              <option value="nationalId">{t('nationalId')}</option>
-              <option value="passport">{t('passport')}</option>
-              <option value="driverLicense">{t('driverLicense')}</option>
-              <option value="other">{t('other')}</option>
+              <option value="NATIONAL_ID">{t('nationalId')}</option>
+              <option value="PASSPORT">{t('passport')}</option>
+              <option value="DRIVER_LICENSE">{t('driverLicense')}</option>
+              <option value="OTHER">{t('other')}</option>
             </select>
           </label>
 
@@ -260,7 +267,7 @@ export function PreferencesPage() {
             <span className="label">{t('documentNumber')}</span>
             <input
               className="input"
-              placeholder="****1234"
+              placeholder={t('maskedNumberPlaceholder')}
               value={identityDocumentNumberMasked}
               onChange={(event) => setIdentityDocumentNumberMasked(event.target.value)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
@@ -271,7 +278,7 @@ export function PreferencesPage() {
             <span className="label">{t('documentFront')}</span>
             <input
               className="input"
-              placeholder="https://..."
+              placeholder={t('urlPlaceholder')}
               value={identityDocumentFrontUrl}
               onChange={(event) => setIdentityDocumentFrontUrl(event.target.value)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
@@ -282,7 +289,7 @@ export function PreferencesPage() {
             <span className="label">{t('documentBack')}</span>
             <input
               className="input"
-              placeholder="https://..."
+              placeholder={t('urlPlaceholder')}
               value={identityDocumentBackUrl}
               onChange={(event) => setIdentityDocumentBackUrl(event.target.value)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
@@ -293,7 +300,7 @@ export function PreferencesPage() {
             <span className="label">{t('selfieUrl')}</span>
             <input
               className="input"
-              placeholder="https://..."
+              placeholder={t('urlPlaceholder')}
               value={identitySelfieUrl}
               onChange={(event) => setIdentitySelfieUrl(event.target.value)}
               disabled={identityVerification ? !identityVerification.canSubmit : false}
@@ -345,7 +352,7 @@ export function PreferencesPage() {
                 </div>
                 <div className="row__meta">
                   {formatMoney(favorite.listing.priceAmount, favorite.listing.currency)} • {favorite.listing.countryName} /{' '}
-                  {favorite.listing.cityName} • Added {formatDate(favorite.createdAt)}
+                  {favorite.listing.cityName} • {t('favoriteAddedOn', { date: formatDate(favorite.createdAt) })}
                 </div>
                 <div className="button-row">
                   <button
@@ -396,12 +403,12 @@ export function PreferencesPage() {
             {savedSearches.map((savedSearch) => (
               <div key={savedSearch.id} className="row">
                 <div className="row__title">
-                  {savedSearch.name} ({savedSearch.notificationFrequency})
+                  {savedSearch.name} ({translateEnum(t, 'notificationFrequency', savedSearch.notificationFrequency)})
                 </div>
                 <pre className="row__meta" style={{ whiteSpace: 'pre-wrap' }}>
                   {JSON.stringify(savedSearch.filters, null, 2)}
                 </pre>
-                <div className="row__meta">Created {formatDate(savedSearch.createdAt)}</div>
+                <div className="row__meta">{t('savedSearchCreatedOn', { date: formatDate(savedSearch.createdAt) })}</div>
                 <div className="button-row">
                   <button
                     type="button"

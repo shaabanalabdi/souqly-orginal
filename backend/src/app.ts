@@ -21,14 +21,18 @@ import craftsmanProfileRoutes from './modules/craftsmanProfiles/craftsmanProfile
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { globalRateLimiter } from './shared/middleware/rateLimiter.js';
 import { validate } from './shared/middleware/validate.js';
+import { getAllowedOrigins, isAllowedOrigin } from './shared/config/origins.js';
 
 const app = express();
+const allowedOrigins = getAllowedOrigins();
 
 // Security
 app.use(helmet());
 app.use(
     cors({
-        origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+        origin: (origin, callback) => {
+            callback(null, isAllowedOrigin(origin, allowedOrigins));
+        },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],

@@ -17,7 +17,7 @@ export function VerifyEmailPage() {
     const run = async () => {
       if (!token) {
         setState('error');
-        setMessage(t('missingVerificationToken', 'Missing verification token.'));
+        setMessage(t('missingVerificationToken'));
         return;
       }
 

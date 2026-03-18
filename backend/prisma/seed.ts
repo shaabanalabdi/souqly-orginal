@@ -1,4 +1,4 @@
-import { PrismaClient, Role, TrustTier, AttributeType } from '@prisma/client';
+import { PrismaClient, Role, StaffRole, TrustTier, AttributeType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -233,6 +233,7 @@ async function seedAdmin(): Promise<void> {
         where: { email: adminEmail },
         update: {
             role: Role.ADMIN,
+            staffRole: StaffRole.ADMIN,
             isActive: true,
             passwordHash,
             trustTier: TrustTier.TOP_SELLER,
@@ -243,6 +244,7 @@ async function seedAdmin(): Promise<void> {
             email: adminEmail,
             passwordHash,
             role: Role.ADMIN,
+            staffRole: StaffRole.ADMIN,
             isActive: true,
             trustTier: TrustTier.TOP_SELLER,
             trustScore: 100,

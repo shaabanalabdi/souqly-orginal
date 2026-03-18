@@ -17,6 +17,25 @@ export class ApiError extends Error {
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     void _next;
 
+    const isInvalidJsonBody =
+        err instanceof SyntaxError &&
+        typeof err === 'object' &&
+        err !== null &&
+        'status' in err &&
+        (err as { status?: number }).status === 400 &&
+        'body' in err;
+
+    if (isInvalidJsonBody) {
+        res.status(400).json({
+            success: false,
+            error: {
+                code: 'INVALID_JSON_BODY',
+                message: 'Request body must be valid JSON.',
+            },
+        });
+        return;
+    }
+
     if (err instanceof ApiError) {
         res.status(err.statusCode).json({
             success: false,

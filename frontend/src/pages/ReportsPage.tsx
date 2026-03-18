@@ -4,6 +4,7 @@ import { reportsService } from '../services/reports.service';
 import { asHttpError } from '../services/http';
 import type { ReportReason, ReportStatus, UserReport } from '../types/domain';
 import { formatDate } from '../utils/format';
+import { translateEnum } from '../utils/i18n';
 
 type StatusFilter = '' | ReportStatus;
 
@@ -83,9 +84,9 @@ export function ReportsPage() {
               value={reportableType}
               onChange={(event) => setReportableType(event.target.value as 'LISTING' | 'USER' | 'MESSAGE')}
             >
-              <option value="LISTING">LISTING</option>
-              <option value="USER">USER</option>
-              <option value="MESSAGE">MESSAGE</option>
+              <option value="LISTING">{translateEnum(t, 'reportableType', 'LISTING')}</option>
+              <option value="USER">{translateEnum(t, 'reportableType', 'USER')}</option>
+              <option value="MESSAGE">{translateEnum(t, 'reportableType', 'MESSAGE')}</option>
             </select>
           </label>
 
@@ -103,11 +104,11 @@ export function ReportsPage() {
           <label className="field">
             <span className="label">{t('reason')}</span>
             <select className="select" value={reason} onChange={(event) => setReason(event.target.value as ReportReason)}>
-              <option value="FRAUD">FRAUD</option>
-              <option value="INAPPROPRIATE">INAPPROPRIATE</option>
-              <option value="DUPLICATE">DUPLICATE</option>
-              <option value="SPAM">SPAM</option>
-              <option value="OTHER">OTHER</option>
+              <option value="FRAUD">{translateEnum(t, 'reportReason', 'FRAUD')}</option>
+              <option value="INAPPROPRIATE">{translateEnum(t, 'reportReason', 'INAPPROPRIATE')}</option>
+              <option value="DUPLICATE">{translateEnum(t, 'reportReason', 'DUPLICATE')}</option>
+              <option value="SPAM">{translateEnum(t, 'reportReason', 'SPAM')}</option>
+              <option value="OTHER">{translateEnum(t, 'reportReason', 'OTHER')}</option>
             </select>
           </label>
 
@@ -150,9 +151,9 @@ export function ReportsPage() {
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             >
               <option value="">{t('allStatuses')}</option>
-              <option value="PENDING">PENDING</option>
-              <option value="RESOLVED">RESOLVED</option>
-              <option value="DISMISSED">DISMISSED</option>
+              <option value="PENDING">{translateEnum(t, 'reportStatus', 'PENDING')}</option>
+              <option value="RESOLVED">{translateEnum(t, 'reportStatus', 'RESOLVED')}</option>
+              <option value="DISMISSED">{translateEnum(t, 'reportStatus', 'DISMISSED')}</option>
             </select>
             <button type="button" className="button button--secondary" onClick={loadReports} disabled={loading}>
               {t('refresh')}
@@ -164,15 +165,20 @@ export function ReportsPage() {
           {reports.map((report) => (
             <div key={report.id} className="row">
               <div className="row__title">
-                {t('report', { id: report.id })} • {report.status}
+                {t('report', { id: report.id })} • {translateEnum(t, 'reportStatus', report.status)}
               </div>
               <div className="row__meta">
-                {t('type')}: {report.reportableType} #{report.reportableId} • {t('reason')}: {report.reason} • {t('submittedOn', { date: formatDate(report.createdAt) })}
+                {t('type')}: {translateEnum(t, 'reportableType', report.reportableType)} #{report.reportableId} • {t('reason')}:{' '}
+                {translateEnum(t, 'reportReason', report.reason)} • {t('submittedOn', { date: formatDate(report.createdAt) })}
               </div>
               {report.description ? <p>{report.description}</p> : null}
               {report.listing ? (
                 <div className="row__meta">
-                  {t('linkedListing', { id: report.listing.id, status: report.listing.status, title: report.listing.title })}
+                  {t('linkedListing', {
+                    id: report.listing.id,
+                    status: translateEnum(t, 'listingStatus', report.listing.status),
+                    title: report.listing.title,
+                  })}
                 </div>
               ) : null}
             </div>

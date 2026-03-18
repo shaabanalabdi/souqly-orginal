@@ -45,7 +45,12 @@ function resolveSocketUrl(): string {
     return explicitUrl;
   }
 
-  // Same-origin by default; works with Vite proxy in development.
+  const { protocol, hostname, port } = window.location;
+  if (port === '3000') {
+    return `${protocol}//${hostname}:5000`;
+  }
+
+  // Same-origin by default; works with Nginx and Vite proxy.
   return window.location.origin;
 }
 

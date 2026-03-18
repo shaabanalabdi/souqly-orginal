@@ -9,6 +9,7 @@ import type {
   StorePlanDto,
   StoreSubscriptionStatus,
 } from '../types/domain';
+import { translateEnum } from '../utils/i18n';
 
 function statusBadgeClass(status: StoreSubscriptionStatus): string {
   if (status === 'ACTIVE') return 'badge badge--success';
@@ -59,7 +60,7 @@ export function SubscriptionsPage() {
     setError(null);
     try {
       await subscriptionsService.subscribe(planCode, selectedCycle, autoRenew);
-      setMessage(`Subscribed to ${planCode} plan successfully.`);
+      setMessage(t('subscribedMsg', { code: planCode }));
       await loadData();
     } catch (err) {
       setError(asHttpError(err).message);
@@ -99,8 +100,7 @@ export function SubscriptionsPage() {
 
       {!current?.eligibleForStorePlans && current !== null ? (
         <div className="alert alert--info">
-          Store subscriptions are available for <strong>business profiles</strong> only. Upgrade your
-          profile to unlock store plans.{' '}
+          {t('businessOnlyMsg')}{' '}
           <Link to="/business-profile" className="link-inline">{t('openBusinessProfile')}</Link>
         </div>
       ) : null}
@@ -110,7 +110,9 @@ export function SubscriptionsPage() {
         <section className="card" style={{ marginBottom: '2rem' }}>
           <div className="card__header">
             <h2>{t('currentSubscription')}</h2>
-            <span className={statusBadgeClass(activeSub.status)}>{activeSub.status}</span>
+            <span className={statusBadgeClass(activeSub.status)}>
+              {translateEnum(t, 'subscriptionStatus', activeSub.status)}
+            </span>
           </div>
           <div className="list">
             <div className="row">
@@ -130,7 +132,7 @@ export function SubscriptionsPage() {
               <span className="row__value">
                 {formatDate(activeSub.expiresAt)}{' '}
                 {isActive ? (
-                  <span className="badge badge--success">{activeSub.daysRemaining}d left</span>
+                  <span className="badge badge--success">{t('daysLeft', { days: activeSub.daysRemaining })}</span>
                 ) : null}
               </span>
             </div>
@@ -207,7 +209,7 @@ export function SubscriptionsPage() {
                 <div className="row">
                   <span className="row__label">{t('analytics')}</span>
                   <span className="row__value" style={{ textTransform: 'capitalize' }}>
-                    {plan.analyticsLevel}
+                    {translateEnum(t, 'analyticsLevel', plan.analyticsLevel)}
                   </span>
                 </div>
               </div>

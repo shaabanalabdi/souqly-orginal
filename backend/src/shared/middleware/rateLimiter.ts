@@ -15,14 +15,16 @@ function buildRateLimiter(options: Partial<Options>) {
     });
 }
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export const globalRateLimiter = buildRateLimiter({
     windowMs: 15 * 60 * 1000,
-    limit: 200,
+    limit: isDev ? 2000 : 200,
 });
 
 export const authLoginLimiter = buildRateLimiter({
     windowMs: 15 * 60 * 1000,
-    limit: 5,
+    limit: isDev ? 100 : 5,
 });
 
 export const authRegisterLimiter = buildRateLimiter({

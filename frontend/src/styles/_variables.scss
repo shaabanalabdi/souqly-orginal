@@ -3,28 +3,28 @@
 // ============================================
 
 // ----- Colors -----
-$color-primary: #1B6B4A; // Deep green (trust, marketplace)
-$color-primary-light: #2D9D6F;
-$color-primary-dark: #0F4A32;
-$color-primary-bg: #E8F5EE;
+$color-primary: #1E3A8A;
+$color-primary-light: #3150a6;
+$color-primary-dark: #172d6a;
+$color-primary-bg: #e6ecff;
 
-$color-secondary: #E8491D; // Orange (CTA, highlights)
-$color-secondary-light: #FF6F47;
-$color-secondary-dark: #C7371A;
+$color-secondary: #F59E0B;
+$color-secondary-light: #fbbf24;
+$color-secondary-dark: #d97706;
 
-$color-accent: #2563EB; // Blue (links, info)
-$color-accent-light: #60A5FA;
-$color-accent-dark: #1D4ED8;
+$color-accent: #F59E0B;
+$color-accent-light: #fcd34d;
+$color-accent-dark: #d97706;
 
 // Neutrals
 $color-white: #FFFFFF;
 $color-black: #000000;
-$color-bg: #F8FAFB;
+$color-bg: #F9FAFB;
 $color-bg-dark: #1A1A2E;
 $color-surface: #FFFFFF;
 $color-surface-dark: #242444;
-$color-text: #1A1A2E;
-$color-text-secondary: #64748B;
+$color-text: #111827;
+$color-text-secondary: #6B7280;
 $color-text-light: #94A3B8;
 $color-text-dark-mode: #E2E8F0;
 $color-border: #E2E8F0;
@@ -44,7 +44,7 @@ $color-trust-trusted: #10B981;
 $color-trust-top: #F59E0B;
 
 // ----- Typography -----
-$font-family-ar: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+$font-family-ar: 'Cairo', 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
 $font-family-en: 'Inter', 'Segoe UI', Roboto, sans-serif;
 $font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
 

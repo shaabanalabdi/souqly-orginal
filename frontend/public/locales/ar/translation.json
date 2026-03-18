@@ -7,7 +7,12 @@
     "switchToArabic": "عربي",
     "pageNotFound": "404 - الصفحة غير موجودة",
     "routeDoesNotExist": "المسار المطلوب غير موجود.",
-    "backToHomepage": "العودة للرئيسية"
+    "backToHomepage": "العودة للرئيسية",
+    "yes": "نعم",
+    "no": "لا",
+    "notAvailable": "غير متوفر",
+    "userReference": "المستخدم #{{id}}",
+    "adminReference": "المسؤول #{{id}}"
   },
   "nav": {
     "language": "اللغة",
@@ -115,7 +120,8 @@
     "verifyingEmail": "جارٍ تأكيد بريدك الإلكتروني...",
     "emailVerifiedSuccess": "تم تأكيد البريد الإلكتروني. يمكنك الآن تسجيل الدخول.",
     "goToLogin": "تسجيل الدخول",
-    "backToRegister": "عودة لإنشاء حساب"
+    "backToRegister": "عودة لإنشاء حساب",
+    "missingVerificationToken": "رمز التحقق مفقود."
   },
   "footer": {
     "copyright": "© {{year}} سوقلي. جميع الحقوق محفوظة."
@@ -249,7 +255,8 @@
     "errorAtLeastOneImage": "مطلوب صورة واحدة على الأقل. قم برفع أو إضافة رابط يدوي.",
     "imagesUploadedMsg": "تم رفع {{count}} صورة بنجاح.",
     "listingSubmittedMsg": "تم إرسال الإعلان #{{listingId}} بنجاح والحالة {{status}}.",
-    "listingReference": "الرقم المرجعي للإعلان: #{{listingId}}. لن تظهر صفحة التفاصيل حتى يتحول إلى نشط."
+    "listingReference": "الرقم المرجعي للإعلان: #{{listingId}}. لن تظهر صفحة التفاصيل حتى يتحول إلى نشط.",
+    "currencyPlaceholder": "USD"
   },
   "reports": {
     "title": "البلاغات",
@@ -291,7 +298,8 @@
     "createBtn": "إنشاء الحساب",
     "resetVerificationMsg": "تم تحديث الحساب. تمت إعادة تعيين شارة التوثيق وتتطلب مراجعة الإدارة.",
     "createdMsg": "تم إنشاء حساب الشركة بنجاح.",
-    "updatedMsg": "تم تحديث حساب الشركة بنجاح."
+    "updatedMsg": "تم تحديث حساب الشركة بنجاح.",
+    "loadingProfile": "جارٍ تحميل الملف الشخصي..."
   },
   "craftsmanProfile": {
     "title": "حساب الحرفيين",
@@ -307,9 +315,18 @@
     "portfolioUrls": "روابط معرض الأعمال (مفصولة بفاصلة)",
     "portfolioUrlsPlaceholder": "https://example.com/item-1, https://example.com/item-2",
     "availableNow": "متاح الآن",
+    "verificationStatus": "حالة التوثيق",
+    "verifiedByAdmin": "موثق من الإدارة",
+    "pendingVerification": "في انتظار التوثيق",
+    "lastUpdated": "آخر تحديث",
+    "verifiedAt": "تاريخ التوثيق",
+    "saving": "جارٍ الحفظ...",
+    "saveChanges": "حفظ التغييرات",
+    "createBtn": "إنشاء الحساب",
     "resetVerificationMsg": "تم تحديث الحساب. تمت إعادة تعيين شارة التوثيق وتتطلب مراجعة الإدارة.",
     "createdMsg": "تم إنشاء حساب الحرفي بنجاح.",
-    "updatedMsg": "تم تحديث حساب الحرفي بنجاح."
+    "updatedMsg": "تم تحديث حساب الحرفي بنجاح.",
+    "loadingProfile": "جارٍ تحميل الملف الشخصي..."
   },
   "chats": {
     "title": "المحادثات",
@@ -345,7 +362,10 @@
     "respondOffer": "الرد على العرض",
     "socketWarning": "تحذير الاتصال: {{code}}",
     "offerCreated": "تم إنشاء العرض #{{id}}.",
-    "offerUpdated": "تم تحديث العرض #{{id}}."
+    "offerUpdated": "تم تحديث العرض #{{id}}.",
+    "lastMessage": "آخر رسالة",
+    "messageMeta": "#{{id}} - {{type}} - {{date}}",
+    "newMessage": "رسالة جديدة"
   },
   "preferences": {
     "title": "التفضيلات",
@@ -393,7 +413,20 @@
     "saveSearch": "حفظ البحث",
     "created": "تم الإنشاء",
     "delete": "حذف",
-    "noSavedSearches": "لا توجد بحوث محفوظة بعد."
+    "noSavedSearches": "لا توجد بحوث محفوظة بعد.",
+    "favoriteAdded": "تمت إضافة الإعلان إلى المفضلة.",
+    "favoriteRemoved": "تمت إزالة الإعلان من المفضلة.",
+    "savedSearchCreated": "تم إنشاء البحث المحفوظ.",
+    "savedSearchDeleted": "تم حذف البحث المحفوظ.",
+    "verificationCodeSent": "تم إرسال رمز التحقق عبر {{channel}} وينتهي خلال {{seconds}} ثانية.",
+    "phoneVerifiedSuccess": "تم توثيق الرقم {{phone}} بنجاح.",
+    "identitySubmitted": "تم إرسال طلب توثيق الهوية بنجاح.",
+    "phonePlaceholder": "+9639XXXXXXXX",
+    "otpPlaceholder": "123456",
+    "maskedNumberPlaceholder": "****1234",
+    "urlPlaceholder": "https://...",
+    "favoriteAddedOn": "أضيف في {{date}}",
+    "savedSearchCreatedOn": "أُنشئ في {{date}}"
   },
   "subscriptions": {
     "title": "اشتراكات المتاجر",
@@ -481,6 +514,175 @@
     "exportCsv": "تصدير CSV",
     "previous": "السابق",
     "next": "التالي",
-    "pageSize": "حجم الصفحة"
+    "pageSize": "حجم الصفحة",
+    "reportUpdated": "تم تحديث البلاغ #{{id}}.",
+    "listingModerated": "تمت إدارة الإعلان #{{id}} بالإجراء {{action}}.",
+    "identityVerificationUpdated": "تم تحديث طلب التوثيق #{{id}} بالإجراء {{action}}.",
+    "userModerated": "تمت إدارة المستخدم #{{id}} بالإجراء {{action}}.",
+    "listingFeaturedUntil": "تم تمييز الإعلان #{{id}} حتى {{date}}.",
+    "listingNoLongerFeatured": "لم يعد الإعلان #{{id}} مميزاً.",
+    "blacklistCreated": "تم إنشاء سجل في القائمة السوداء.",
+    "blacklistUpdated": "تم تحديث سجل القائمة السوداء #{{id}}.",
+    "blacklistDeleted": "تم حذف سجل القائمة السوداء #{{id}}.",
+    "digestRunDone": "اكتمل تشغيل الملخص ({{frequency}}).",
+    "digestRunSummaryItem": "{{frequency}}: {{listings}} إعلان / {{users}} مستخدم",
+    "digestSkipSummaryItem": "{{frequency}}: {{reason}}",
+    "digestRunsSummary": "النتائج: {{summary}}.",
+    "digestSkippedSummary": "المتخطى: {{summary}}.",
+    "noDigestHistoryToExport": "لا توجد صفوف في سجل الملخصات للتصدير."
+  },
+  "enums": {
+    "listingCondition": {
+      "NEW": "جديد",
+      "USED": "مستعمل"
+    },
+    "listingStatus": {
+      "PENDING": "قيد الانتظار",
+      "ACTIVE": "نشط",
+      "REJECTED": "مرفوض",
+      "SOLD": "مباع",
+      "EXPIRED": "منتهي",
+      "DELETED": "محذوف"
+    },
+    "messageType": {
+      "TEXT": "نصي",
+      "IMAGE": "صورة",
+      "OFFER": "عرض",
+      "PHONE_REQUEST": "طلب هاتف",
+      "SYSTEM": "نظام"
+    },
+    "offerStatus": {
+      "PENDING": "قيد الانتظار",
+      "ACCEPTED": "مقبول",
+      "REJECTED": "مرفوض",
+      "COUNTERED": "عرض مضاد"
+    },
+    "dealStatus": {
+      "PENDING": "قيد الانتظار",
+      "CONFIRMED": "مؤكد",
+      "COMPLETED": "مكتمل",
+      "CANCELLED": "ملغى",
+      "DISPUTED": "متنازع عليه"
+    },
+    "escrowStatus": {
+      "NONE": "لا يوجد",
+      "HELD": "محجوز",
+      "RELEASED": "مُفرج عنه",
+      "REFUNDED": "مسترد"
+    },
+    "disputeStatus": {
+      "OPEN": "مفتوح",
+      "UNDER_REVIEW": "قيد المراجعة",
+      "RESOLVED": "محلول"
+    },
+    "disputeResolutionAction": {
+      "release_escrow": "إفراج الضمان",
+      "refund_escrow": "استرداد الضمان",
+      "close_no_escrow": "إغلاق النزاع"
+    },
+    "reportReason": {
+      "FRAUD": "احتيال",
+      "INAPPROPRIATE": "محتوى غير لائق",
+      "DUPLICATE": "إعلان مكرر",
+      "SPAM": "رسائل مزعجة",
+      "OTHER": "أخرى"
+    },
+    "reportStatus": {
+      "PENDING": "قيد الانتظار",
+      "RESOLVED": "محلول",
+      "DISMISSED": "مرفوض"
+    },
+    "reportableType": {
+      "LISTING": "إعلان",
+      "USER": "مستخدم",
+      "MESSAGE": "رسالة"
+    },
+    "identityVerificationStatus": {
+      "NONE": "لا يوجد",
+      "PENDING": "قيد الانتظار",
+      "VERIFIED": "موثق",
+      "REJECTED": "مرفوض"
+    },
+    "identityDocumentType": {
+      "NATIONAL_ID": "بطاقة هوية وطنية",
+      "PASSPORT": "جواز سفر",
+      "DRIVER_LICENSE": "رخصة قيادة",
+      "OTHER": "أخرى"
+    },
+    "notificationFrequency": {
+      "instant": "فوري",
+      "daily": "يومي",
+      "weekly": "أسبوعي"
+    },
+    "subscriptionStatus": {
+      "ACTIVE": "نشط",
+      "EXPIRED": "منتهي",
+      "CANCELED": "ملغى"
+    },
+    "analyticsLevel": {
+      "basic": "أساسي",
+      "advanced": "متقدم"
+    },
+    "staffRole": {
+      "NONE": "بدون دور",
+      "MODERATOR": "مشرف",
+      "ADMIN": "مسؤول"
+    },
+    "accountType": {
+      "INDIVIDUAL": "فرد",
+      "STORE": "متجر",
+      "CRAFTSMAN": "حرفي"
+    },
+    "userRole": {
+      "USER": "مستخدم",
+      "MODERATOR": "مشرف",
+      "ADMIN": "مسؤول"
+    },
+    "trustTier": {
+      "NEW": "جديد",
+      "VERIFIED": "موثق",
+      "TRUSTED": "موثوق",
+      "TOP_SELLER": "بائع مميز"
+    },
+    "blacklistType": {
+      "phone": "هاتف",
+      "ip": "IP",
+      "keyword": "كلمة مفتاحية"
+    },
+    "digestSource": {
+      "manual": "يدوي",
+      "scheduler": "مجدول"
+    },
+    "digestFrequency": {
+      "daily": "يومي",
+      "weekly": "أسبوعي"
+    },
+    "digestRunMode": {
+      "daily": "يومي",
+      "weekly": "أسبوعي",
+      "both": "الاثنان"
+    },
+    "digestSkipReason": {
+      "LOCKED": "مقفل",
+      "ERROR": "خطأ"
+    },
+    "identityDecisionAction": {
+      "approve": "موافقة",
+      "reject": "رفض"
+    },
+    "listingAction": {
+      "approve": "موافقة",
+      "reject": "رفض",
+      "suspend": "تعليق",
+      "delete": "حذف"
+    },
+    "userAction": {
+      "activate": "تفعيل",
+      "deactivate": "إلغاء التفعيل",
+      "ban": "حظر",
+      "unban": "رفع الحظر",
+      "set_staff_role": "تعيين دور الموظف",
+      "set_account_type": "تعيين نوع الحساب"
+    }
   }
 }

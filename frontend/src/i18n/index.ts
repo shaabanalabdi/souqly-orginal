@@ -5,13 +5,15 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import HttpBackend from 'i18next-http-backend';
-import LanguageDetector from 'i18next-browser-languagedetector';
+
+// Force Arabic as the default language
+const savedLang = localStorage.getItem('souqly_lang') ?? 'ar';
 
 i18n
     .use(HttpBackend)
-    .use(LanguageDetector)
     .use(initReactI18next)
     .init({
+        lng: savedLang,
         fallbackLng: 'ar',
         supportedLngs: ['ar', 'en'],
         defaultNS: 'translation',
@@ -19,12 +21,6 @@ i18n
 
         backend: {
             loadPath: '/locales/{{lng}}/{{ns}}.json',
-        },
-
-        detection: {
-            order: ['localStorage'],
-            caches: ['localStorage'],
-            lookupLocalStorage: 'souqly_lang',
         },
 
         interpolation: {
@@ -47,6 +43,11 @@ export function setDirection(lang: string): void {
     document.documentElement.setAttribute('lang', lang);
 }
 
+// Apply direction immediately on load
+setDirection(savedLang);
+
+// Update direction whenever language changes
 i18n.on('languageChanged', (lng: string) => {
+    localStorage.setItem('souqly_lang', lng);
     setDirection(lng);
 });

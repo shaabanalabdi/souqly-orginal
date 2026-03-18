@@ -7,7 +7,12 @@
     "switchToArabic": "AR",
     "pageNotFound": "404 - Page Not Found",
     "routeDoesNotExist": "The requested route does not exist.",
-    "backToHomepage": "Back to homepage"
+    "backToHomepage": "Back to homepage",
+    "yes": "Yes",
+    "no": "No",
+    "notAvailable": "N/A",
+    "userReference": "User #{{id}}",
+    "adminReference": "Admin #{{id}}"
   },
   "nav": {
     "language": "Language",
@@ -115,7 +120,8 @@
     "verifyingEmail": "Verifying your email...",
     "emailVerifiedSuccess": "Email verified. You can now login.",
     "goToLogin": "Go to login",
-    "backToRegister": "Back to register"
+    "backToRegister": "Back to register",
+    "missingVerificationToken": "Missing verification token."
   },
   "footer": {
     "copyright": "© {{year}} Souqly. All rights reserved."
@@ -249,7 +255,8 @@
     "errorAtLeastOneImage": "At least one image is required. Upload files or add manual URLs.",
     "imagesUploadedMsg": "{{count}} image(s) uploaded successfully.",
     "listingSubmittedMsg": "Listing #{{listingId}} submitted successfully with status {{status}}.",
-    "listingReference": "Listing reference: #{{listingId}}. Public details page only works when status becomes ACTIVE."
+    "listingReference": "Listing reference: #{{listingId}}. Public details page only works when status becomes ACTIVE.",
+    "currencyPlaceholder": "USD"
   },
   "reports": {
     "title": "Reports",
@@ -291,7 +298,8 @@
     "createBtn": "Create Profile",
     "resetVerificationMsg": "Business profile updated. Verification badge has been reset and requires admin review.",
     "createdMsg": "Business profile created successfully.",
-    "updatedMsg": "Business profile updated successfully."
+    "updatedMsg": "Business profile updated successfully.",
+    "loadingProfile": "Loading profile..."
   },
   "craftsmanProfile": {
     "title": "Craftsman Profile",
@@ -307,9 +315,18 @@
     "portfolioUrls": "Portfolio URLs (comma separated)",
     "portfolioUrlsPlaceholder": "https://example.com/item-1, https://example.com/item-2",
     "availableNow": "Available now",
+    "verificationStatus": "Verification Status",
+    "verifiedByAdmin": "Verified by admin",
+    "pendingVerification": "Pending verification",
+    "lastUpdated": "Last updated",
+    "verifiedAt": "Verified at",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes",
+    "createBtn": "Create Profile",
     "resetVerificationMsg": "Craftsman profile updated. Verification badge has been reset and requires admin review.",
     "createdMsg": "Craftsman profile created successfully.",
-    "updatedMsg": "Craftsman profile updated successfully."
+    "updatedMsg": "Craftsman profile updated successfully.",
+    "loadingProfile": "Loading profile..."
   },
   "chats": {
     "title": "Chats",
@@ -345,7 +362,10 @@
     "respondOffer": "Respond offer",
     "socketWarning": "Socket warning: {{code}}",
     "offerCreated": "Offer #{{id}} created.",
-    "offerUpdated": "Offer #{{id}} updated."
+    "offerUpdated": "Offer #{{id}} updated.",
+    "lastMessage": "Last",
+    "messageMeta": "#{{id}} - {{type}} - {{date}}",
+    "newMessage": "New message"
   },
   "preferences": {
     "title": "Preferences",
@@ -393,7 +413,20 @@
     "saveSearch": "Save search",
     "created": "Created",
     "delete": "Delete",
-    "noSavedSearches": "No saved searches yet."
+    "noSavedSearches": "No saved searches yet.",
+    "favoriteAdded": "Favorite added.",
+    "favoriteRemoved": "Favorite removed.",
+    "savedSearchCreated": "Saved search created.",
+    "savedSearchDeleted": "Saved search deleted.",
+    "verificationCodeSent": "Verification code sent via {{channel}}. Expires in {{seconds}} seconds.",
+    "phoneVerifiedSuccess": "Phone {{phone}} verified successfully.",
+    "identitySubmitted": "Identity verification request submitted successfully.",
+    "phonePlaceholder": "+9639XXXXXXXX",
+    "otpPlaceholder": "123456",
+    "maskedNumberPlaceholder": "****1234",
+    "urlPlaceholder": "https://...",
+    "favoriteAddedOn": "Added {{date}}",
+    "savedSearchCreatedOn": "Created {{date}}"
   },
   "subscriptions": {
     "title": "Store Subscriptions",
@@ -481,6 +514,175 @@
     "exportCsv": "Export CSV",
     "previous": "Previous",
     "next": "Next",
-    "pageSize": "Page size"
+    "pageSize": "Page size",
+    "reportUpdated": "Report #{{id}} updated.",
+    "listingModerated": "Listing #{{id}} moderated with action {{action}}.",
+    "identityVerificationUpdated": "Identity verification #{{id}} updated with action {{action}}.",
+    "userModerated": "User #{{id}} moderated with action {{action}}.",
+    "listingFeaturedUntil": "Listing #{{id}} featured until {{date}}.",
+    "listingNoLongerFeatured": "Listing #{{id}} is no longer featured.",
+    "blacklistCreated": "Blacklist entry created.",
+    "blacklistUpdated": "Blacklist entry #{{id}} updated.",
+    "blacklistDeleted": "Blacklist entry #{{id}} deleted.",
+    "digestRunDone": "Digest run ({{frequency}}) completed.",
+    "digestRunSummaryItem": "{{frequency}}: {{listings}} listings / {{users}} users",
+    "digestSkipSummaryItem": "{{frequency}}: {{reason}}",
+    "digestRunsSummary": "Runs: {{summary}}.",
+    "digestSkippedSummary": "Skipped: {{summary}}.",
+    "noDigestHistoryToExport": "No digest history rows to export."
+  },
+  "enums": {
+    "listingCondition": {
+      "NEW": "New",
+      "USED": "Used"
+    },
+    "listingStatus": {
+      "PENDING": "Pending",
+      "ACTIVE": "Active",
+      "REJECTED": "Rejected",
+      "SOLD": "Sold",
+      "EXPIRED": "Expired",
+      "DELETED": "Deleted"
+    },
+    "messageType": {
+      "TEXT": "Text",
+      "IMAGE": "Image",
+      "OFFER": "Offer",
+      "PHONE_REQUEST": "Phone request",
+      "SYSTEM": "System"
+    },
+    "offerStatus": {
+      "PENDING": "Pending",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "COUNTERED": "Countered"
+    },
+    "dealStatus": {
+      "PENDING": "Pending",
+      "CONFIRMED": "Confirmed",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "DISPUTED": "Disputed"
+    },
+    "escrowStatus": {
+      "NONE": "None",
+      "HELD": "Held",
+      "RELEASED": "Released",
+      "REFUNDED": "Refunded"
+    },
+    "disputeStatus": {
+      "OPEN": "Open",
+      "UNDER_REVIEW": "Under review",
+      "RESOLVED": "Resolved"
+    },
+    "disputeResolutionAction": {
+      "release_escrow": "Release escrow",
+      "refund_escrow": "Refund escrow",
+      "close_no_escrow": "Close dispute"
+    },
+    "reportReason": {
+      "FRAUD": "Fraud",
+      "INAPPROPRIATE": "Inappropriate",
+      "DUPLICATE": "Duplicate",
+      "SPAM": "Spam",
+      "OTHER": "Other"
+    },
+    "reportStatus": {
+      "PENDING": "Pending",
+      "RESOLVED": "Resolved",
+      "DISMISSED": "Dismissed"
+    },
+    "reportableType": {
+      "LISTING": "Listing",
+      "USER": "User",
+      "MESSAGE": "Message"
+    },
+    "identityVerificationStatus": {
+      "NONE": "None",
+      "PENDING": "Pending",
+      "VERIFIED": "Verified",
+      "REJECTED": "Rejected"
+    },
+    "identityDocumentType": {
+      "NATIONAL_ID": "National ID",
+      "PASSPORT": "Passport",
+      "DRIVER_LICENSE": "Driver license",
+      "OTHER": "Other"
+    },
+    "notificationFrequency": {
+      "instant": "instant",
+      "daily": "daily",
+      "weekly": "weekly"
+    },
+    "subscriptionStatus": {
+      "ACTIVE": "Active",
+      "EXPIRED": "Expired",
+      "CANCELED": "Canceled"
+    },
+    "analyticsLevel": {
+      "basic": "Basic",
+      "advanced": "Advanced"
+    },
+    "staffRole": {
+      "NONE": "No staff role",
+      "MODERATOR": "Moderator",
+      "ADMIN": "Admin"
+    },
+    "accountType": {
+      "INDIVIDUAL": "Individual",
+      "STORE": "Store",
+      "CRAFTSMAN": "Craftsman"
+    },
+    "userRole": {
+      "USER": "User",
+      "MODERATOR": "Moderator",
+      "ADMIN": "Admin"
+    },
+    "trustTier": {
+      "NEW": "New",
+      "VERIFIED": "Verified",
+      "TRUSTED": "Trusted",
+      "TOP_SELLER": "Top seller"
+    },
+    "blacklistType": {
+      "phone": "Phone",
+      "ip": "IP",
+      "keyword": "Keyword"
+    },
+    "digestSource": {
+      "manual": "Manual",
+      "scheduler": "Scheduler"
+    },
+    "digestFrequency": {
+      "daily": "Daily",
+      "weekly": "Weekly"
+    },
+    "digestRunMode": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "both": "Both"
+    },
+    "digestSkipReason": {
+      "LOCKED": "Locked",
+      "ERROR": "Error"
+    },
+    "identityDecisionAction": {
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "listingAction": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "suspend": "Suspend",
+      "delete": "Delete"
+    },
+    "userAction": {
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "ban": "Ban",
+      "unban": "Unban",
+      "set_staff_role": "Set staff role",
+      "set_account_type": "Set account type"
+    }
   }
 }

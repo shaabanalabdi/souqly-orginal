@@ -23,6 +23,11 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
 import { BusinessProfilePage } from './pages/BusinessProfilePage';
 import { CraftsmanProfilePage } from './pages/CraftsmanProfilePage';
+import { SearchPage } from './pages/SearchPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { StorePage } from './pages/StorePage';
+import { CraftsmanPage } from './pages/CraftsmanPage';
+import { DashboardPage } from './pages/DashboardPage';
 import './styles/app.scss';
 
 function App() {
@@ -37,6 +42,9 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/store" element={<StorePage />} />
+          <Route path="/craftsman" element={<CraftsmanPage />} />
           <Route path="/listings/:id" element={<ListingDetailsPage />} />
           <Route path="/seo/:countryCode/:cityId/:categorySlug" element={<SeoLandingPage />} />
           <Route path="/terms" element={<TermsPage />} />
@@ -51,6 +59,8 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/listings/create" element={<CreateListingPage />} />
             <Route path="/chats" element={<ChatPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/preferences" element={<PreferencesPage />} />
             <Route path="/reports" element={<ReportsPage />} />

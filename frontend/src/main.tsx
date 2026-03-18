@@ -2,6 +2,7 @@ import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import i18n from './i18n';
+import './styles/tailwind.css';
 import './styles/global.scss';
 
 const lang = localStorage.getItem('souqly_lang') || 'ar';

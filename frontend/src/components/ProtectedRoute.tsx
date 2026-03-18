@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
 
 interface ProtectedRouteProps {
@@ -7,12 +8,13 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ adminOnly = false }: ProtectedRouteProps) {
   const location = useLocation();
+  const { t } = useTranslation();
   const initialized = useAuthStore((state) => state.initialized);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const staffRole = useAuthStore((state) => state.user?.staffRole);
 
   if (!initialized) {
-    return <p className="muted-text">Loading session...</p>;
+    return <p className="muted-text">{t('common.loading')}</p>;
   }
 
   if (!isAuthenticated) {

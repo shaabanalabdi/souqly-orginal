@@ -1,84 +1,86 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ListingCard } from '../components/ListingCard';
 import { categoriesService } from '../services/categories.service';
 import { geoService } from '../services/geo.service';
 import { listingsService } from '../services/listings.service';
 import { mediaService } from '../services/media.service';
 import { asHttpError } from '../services/http';
-import type { AttributeDefinition, Category, Country, ListingCondition, Subcategory } from '../types/domain';
+import type {
+  AttributeDefinition,
+  Category,
+  Country,
+  ListingCondition,
+  Subcategory,
+} from '../types/domain';
+import { useLocaleSwitch } from '../utils/localeSwitch';
 
-interface ListingFormState {
+type ContactVisibility = 'hidden' | 'visible' | 'approval';
+
+interface ListingDraft {
+  images: string[];
+  title: string;
+  description: string;
   categorySlug: string;
   subcategoryId: string;
+  attributes: Record<number, string>;
+  price: string;
+  currency: string;
+  condition: ListingCondition;
   countryId: string;
   cityId: string;
-  titleAr: string;
-  titleEn: string;
-  descriptionAr: string;
-  descriptionEn: string;
-  priceAmount: string;
-  currency: string;
-  condition: '' | ListingCondition;
-  negotiable: boolean;
-  phoneVisibility: boolean;
-  whatsappVisibility: boolean;
-  manualUrlsText: string;
+  latitude: string;
+  longitude: string;
+  phoneVisibility: ContactVisibility;
+  whatsappVisibility: ContactVisibility;
 }
 
-const initialFormState: ListingFormState = {
+const INITIAL_DRAFT: ListingDraft = {
+  images: [],
+  title: '',
+  description: '',
   categorySlug: '',
   subcategoryId: '',
+  attributes: {},
+  price: '',
+  currency: 'SAR',
+  condition: 'USED',
   countryId: '',
   cityId: '',
-  titleAr: '',
-  titleEn: '',
-  descriptionAr: '',
-  descriptionEn: '',
-  priceAmount: '',
-  currency: '',
-  condition: '',
-  negotiable: true,
-  phoneVisibility: false,
-  whatsappVisibility: false,
-  manualUrlsText: '',
+  latitude: '',
+  longitude: '',
+  phoneVisibility: 'visible',
+  whatsappVisibility: 'visible',
 };
 
-function parseOptionalNumber(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+const STEP_TITLES = [
+  { ar: 'الأساسيات', en: 'Basics' },
+  { ar: 'التفاصيل', en: 'Details' },
+  { ar: 'الموقع والتواصل', en: 'Location & Contact' },
+  { ar: 'المراجعة والنشر', en: 'Review & Publish' },
+];
+
+function normalizeVisibility(value: ContactVisibility): boolean {
+  return value === 'visible';
 }
 
 export function CreateListingPage() {
-  const [form, setForm] = useState<ListingFormState>(initialFormState);
+  const { pick, locale } = useLocaleSwitch();
+  const [step, setStep] = useState(1);
+  const [draft, setDraft] = useState<ListingDraft>(INITIAL_DRAFT);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [statusMessage, setStatusMessage] = useState('');
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [createdListingId, setCreatedListingId] = useState<number | null>(null);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [cities, setCities] = useState<Array<{ id: number; name: string }>>([]);
   const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
-  const [attributeValues, setAttributeValues] = useState<Record<number, string>>({});
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-  const [uploadingImages, setUploadingImages] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [createdListingId, setCreatedListingId] = useState<number | null>(null);
-
-  const selectedCountryCode = useMemo(() => {
-    const countryId = Number(form.countryId);
-    if (!countryId) return '';
-    return countries.find((country) => country.id === countryId)?.code ?? '';
-  }, [countries, form.countryId]);
-
-  const selectedSubcategorySlug = useMemo(() => {
-    const subcategoryId = Number(form.subcategoryId);
-    if (!subcategoryId) return '';
-    return subcategories.find((subcategory) => subcategory.id === subcategoryId)?.slug ?? '';
-  }, [subcategories, form.subcategoryId]);
 
   useEffect(() => {
-    const loadInitial = async () => {
+    const loadStatic = async () => {
       try {
         const [categoriesResult, countriesResult] = await Promise.all([
           categoriesService.listCategories(),
@@ -86,458 +88,519 @@ export function CreateListingPage() {
         ]);
         setCategories(categoriesResult);
         setCountries(countriesResult);
-      } catch (err) {
-        setError(asHttpError(err).message);
+      } catch (error) {
+        setStatusMessage(asHttpError(error).message);
       }
     };
 
-    void loadInitial();
+    void loadStatic();
   }, []);
 
   useEffect(() => {
-    if (!form.categorySlug) {
-      setSubcategories([]);
-      setForm((prev) => ({ ...prev, subcategoryId: '' }));
-      return;
-    }
-
     const loadSubcategories = async () => {
+      if (!draft.categorySlug) {
+        setSubcategories([]);
+        setAttributes([]);
+        setDraft((prev) => ({ ...prev, subcategoryId: '', attributes: {} }));
+        return;
+      }
+
       try {
-        const result = await categoriesService.listSubcategories(form.categorySlug);
+        const result = await categoriesService.listSubcategories(draft.categorySlug);
         setSubcategories(result.subcategories);
-      } catch (err) {
-        setError(asHttpError(err).message);
+      } catch {
+        setSubcategories([]);
       }
     };
 
     void loadSubcategories();
-  }, [form.categorySlug]);
+  }, [draft.categorySlug]);
 
   useEffect(() => {
-    if (!selectedCountryCode) {
-      setCities([]);
-      setForm((prev) => ({ ...prev, cityId: '' }));
-      return;
-    }
-
     const loadCities = async () => {
+      if (!draft.countryId) {
+        setCities([]);
+        setDraft((prev) => ({ ...prev, cityId: '' }));
+        return;
+      }
+
+      const selectedCountry = countries.find((country) => String(country.id) === draft.countryId);
+      if (!selectedCountry) return;
+
       try {
-        const result = await geoService.listCountryCities(selectedCountryCode);
-        setCities(result.cities);
-      } catch (err) {
-        setError(asHttpError(err).message);
+        const result = await geoService.listCountryCities(selectedCountry.code);
+        setCities(result.cities.map((city) => ({ id: city.id, name: city.name })));
+      } catch {
+        setCities([]);
       }
     };
 
     void loadCities();
-  }, [selectedCountryCode]);
+  }, [countries, draft.countryId]);
 
   useEffect(() => {
-    if (!selectedSubcategorySlug) {
-      setAttributes([]);
-      setAttributeValues({});
-      return;
-    }
-
     const loadAttributes = async () => {
+      if (!draft.subcategoryId) {
+        setAttributes([]);
+        setDraft((prev) => ({ ...prev, attributes: {} }));
+        return;
+      }
+
+      const selectedSubcategory = subcategories.find((item) => String(item.id) === draft.subcategoryId);
+      if (!selectedSubcategory) return;
+
       try {
-        const result = await categoriesService.listAttributes(selectedSubcategorySlug);
+        const result = await categoriesService.listAttributes(selectedSubcategory.slug);
         setAttributes(result.attributes);
-      } catch (err) {
-        setError(asHttpError(err).message);
+      } catch {
+        setAttributes([]);
       }
     };
 
     void loadAttributes();
-  }, [selectedSubcategorySlug]);
+  }, [draft.subcategoryId, subcategories]);
 
-  const handleUploadSelectedImages = async () => {
-    if (selectedFiles.length === 0) {
-      setError('Please select at least one image file.');
-      return;
+  const progressWidth = `${(step / STEP_TITLES.length) * 100}%`;
+
+  const validateStep = (currentStep: number): boolean => {
+    const nextErrors: Record<string, string> = {};
+
+    if (currentStep === 1) {
+      if (draft.images.length === 0) {
+        nextErrors.images = pick('أضف صورة واحدة على الأقل.', 'Add at least one image.');
+      }
+      if (draft.title.trim().length < 5) {
+        nextErrors.title = pick('العنوان يجب أن يكون 5 أحرف على الأقل.', 'Title must be at least 5 characters.');
+      }
+      if (draft.description.trim().length < 20) {
+        nextErrors.description = pick(
+          'الوصف يجب أن يكون 20 حرفًا على الأقل.',
+          'Description must be at least 20 characters.',
+        );
+      }
     }
 
-    setUploadingImages(true);
-    setError(null);
-    setSuccessMessage(null);
+    if (currentStep === 2) {
+      if (!draft.categorySlug) {
+        nextErrors.categorySlug = pick('اختر الفئة.', 'Select a category.');
+      }
+      if (!draft.subcategoryId) {
+        nextErrors.subcategoryId = pick('اختر الفئة الفرعية.', 'Select a subcategory.');
+      }
+      if (!draft.price || Number(draft.price) <= 0) {
+        nextErrors.price = pick('أدخل سعرًا صحيحًا.', 'Enter a valid price.');
+      }
+    }
 
+    if (currentStep === 3) {
+      if (!draft.countryId) {
+        nextErrors.countryId = pick('اختر الدولة.', 'Select country.');
+      }
+      if (!draft.cityId) {
+        nextErrors.cityId = pick('اختر المدينة.', 'Select city.');
+      }
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const nextStep = () => {
+    if (!validateStep(step)) return;
+    setStep((prev) => Math.min(STEP_TITLES.length, prev + 1));
+  };
+
+  const previousStep = () => setStep((prev) => Math.max(1, prev - 1));
+
+  const onPickImages = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+
+    setUploadingImages(true);
+    setStatusMessage('');
     try {
-      const result = await mediaService.uploadImages(selectedFiles);
-      const urls = result.map((item) => item.url);
-      setUploadedImages((prev) => Array.from(new Set([...prev, ...urls])));
-      setSelectedFiles([]);
-      setSuccessMessage(`${urls.length} image(s) uploaded successfully.`);
-    } catch (err) {
-      setError(asHttpError(err).message);
+      const uploaded = await mediaService.uploadImages(files);
+      const urls = uploaded.map((item) => item.url);
+      setDraft((prev) => ({ ...prev, images: Array.from(new Set([...prev.images, ...urls])) }));
+    } catch (error) {
+      setStatusMessage(asHttpError(error).message);
     } finally {
       setUploadingImages(false);
     }
   };
 
-  const handleRemoveUploadedImage = (url: string) => {
-    setUploadedImages((prev) => prev.filter((item) => item !== url));
+  const updateAttribute = (key: number, value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      attributes: {
+        ...prev.attributes,
+        [key]: value,
+      },
+    }));
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    setCreatedListingId(null);
+  const previewPrice = useMemo(() => Number(draft.price || 0), [draft.price]);
 
-    const manualUrls = form.manualUrlsText
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean);
+  const publish = async () => {
+    if (!validateStep(3)) return;
 
-    const images = Array.from(new Set([...uploadedImages, ...manualUrls]));
-    if (images.length === 0) {
-      setError('At least one image is required. Upload files or add manual URLs.');
-      setLoading(false);
-      return;
-    }
-
-    const attributesPayload = attributes
-      .map((attribute) => ({
-        attributeDefinitionId: attribute.id,
-        value: (attributeValues[attribute.id] ?? '').trim(),
-      }))
-      .filter((item) => item.value.length > 0);
-
+    setPublishLoading(true);
+    setStatusMessage('');
     try {
-      const createdListing = await listingsService.create({
-        subcategoryId: Number(form.subcategoryId),
-        countryId: Number(form.countryId),
-        cityId: Number(form.cityId),
-        titleAr: form.titleAr,
-        titleEn: form.titleEn || undefined,
-        descriptionAr: form.descriptionAr,
-        descriptionEn: form.descriptionEn || undefined,
-        priceAmount: parseOptionalNumber(form.priceAmount),
-        currency: form.currency.trim().toUpperCase() || undefined,
-        negotiable: form.negotiable,
-        condition: form.condition || undefined,
-        phoneVisibility: form.phoneVisibility,
-        whatsappVisibility: form.whatsappVisibility,
-        images,
+      const attributesPayload = attributes
+        .map((attribute) => ({
+          attributeDefinitionId: attribute.id,
+          value: (draft.attributes[attribute.id] ?? '').trim(),
+        }))
+        .filter((item) => item.value.length > 0);
+
+      const created = await listingsService.create({
+        subcategoryId: Number(draft.subcategoryId),
+        countryId: Number(draft.countryId),
+        cityId: Number(draft.cityId),
+        titleAr: draft.title,
+        descriptionAr: draft.description,
+        priceAmount: Number(draft.price),
+        currency: draft.currency,
+        condition: draft.condition,
+        locationLat: draft.latitude ? Number(draft.latitude) : undefined,
+        locationLng: draft.longitude ? Number(draft.longitude) : undefined,
+        phoneVisibility: normalizeVisibility(draft.phoneVisibility),
+        whatsappVisibility: normalizeVisibility(draft.whatsappVisibility),
+        images: draft.images,
         attributes: attributesPayload,
       });
 
-      setCreatedListingId(createdListing.id);
-      setSuccessMessage(
-        `Listing #${createdListing.id} submitted successfully with status ${createdListing.status}.`,
-      );
-      setForm(initialFormState);
-      setSubcategories([]);
-      setCities([]);
-      setAttributes([]);
-      setAttributeValues({});
-      setUploadedImages([]);
-      setSelectedFiles([]);
-    } catch (err) {
-      setError(asHttpError(err).message);
+      setCreatedListingId(created.id);
+      setStatusMessage(pick('تم نشر الإعلان بنجاح.', 'Listing published successfully.'));
+      setDraft(INITIAL_DRAFT);
+      setStep(1);
+      setErrors({});
+    } catch (error) {
+      setStatusMessage(asHttpError(error).message);
     } finally {
-      setLoading(false);
+      setPublishLoading(false);
     }
   };
 
   return (
-    <section className="card">
-      <h1 className="page-title">Create Listing</h1>
-      <p className="page-subtitle">Submit a new classified ad with real image upload support.</p>
+    <section className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-black text-ink">{pick('إنشاء إعلان جديد', 'Create New Listing')}</h1>
+        <p className="mt-1 text-sm text-muted">
+          {pick('اتبع الخطوات لإكمال الإعلان بشكل احترافي.', 'Follow steps to publish a high-quality listing.')}
+        </p>
+      </header>
 
-      <form className="stack" onSubmit={handleSubmit}>
-        <div className="grid grid--3">
-          <label className="field">
-            <span className="label">Category</span>
-            <select
-              className="select"
-              required
-              value={form.categorySlug}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  categorySlug: event.target.value,
-                  subcategoryId: '',
-                }))
-              }
-            >
-              <option value="">Select category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.slug}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="label">Subcategory</span>
-            <select
-              className="select"
-              required
-              value={form.subcategoryId}
-              onChange={(event) => setForm((prev) => ({ ...prev, subcategoryId: event.target.value }))}
-              disabled={subcategories.length === 0}
-            >
-              <option value="">Select subcategory</option>
-              {subcategories.map((subcategory) => (
-                <option key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="label">Condition</span>
-            <select
-              className="select"
-              value={form.condition}
-              onChange={(event) => setForm((prev) => ({ ...prev, condition: event.target.value as ListingCondition | '' }))}
-            >
-              <option value="">Not specified</option>
-              <option value="NEW">NEW</option>
-              <option value="USED">USED</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="label">Country</span>
-            <select
-              className="select"
-              required
-              value={form.countryId}
-              onChange={(event) => setForm((prev) => ({ ...prev, countryId: event.target.value, cityId: '' }))}
-            >
-              <option value="">Select country</option>
-              {countries.map((country) => (
-                <option key={country.id} value={country.id}>
-                  {country.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="label">City</span>
-            <select
-              className="select"
-              required
-              value={form.cityId}
-              onChange={(event) => setForm((prev) => ({ ...prev, cityId: event.target.value }))}
-              disabled={cities.length === 0}
-            >
-              <option value="">Select city</option>
-              {cities.map((city) => (
-                <option key={city.id} value={city.id}>
-                  {city.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="label">Currency</span>
-            <input
-              className="input"
-              value={form.currency}
-              onChange={(event) => setForm((prev) => ({ ...prev, currency: event.target.value }))}
-              placeholder="USD"
-            />
-          </label>
-
-          <label className="field">
-            <span className="label">Price</span>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              value={form.priceAmount}
-              onChange={(event) => setForm((prev) => ({ ...prev, priceAmount: event.target.value }))}
-            />
-          </label>
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-muted">
+          {STEP_TITLES.map((item, index) => (
+            <span key={item.en} className={step === index + 1 ? 'text-primary' : ''}>
+              {index + 1}. {pick(item.ar, item.en)}
+            </span>
+          ))}
         </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: progressWidth }} />
+        </div>
+      </section>
 
-        <label className="field">
-          <span className="label">Arabic title</span>
-          <input
-            className="input"
-            required
-            minLength={5}
-            maxLength={200}
-            value={form.titleAr}
-            onChange={(event) => setForm((prev) => ({ ...prev, titleAr: event.target.value }))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="label">English title (optional)</span>
-          <input
-            className="input"
-            minLength={5}
-            maxLength={200}
-            value={form.titleEn}
-            onChange={(event) => setForm((prev) => ({ ...prev, titleEn: event.target.value }))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="label">Arabic description</span>
-          <textarea
-            className="textarea"
-            required
-            minLength={20}
-            maxLength={5000}
-            value={form.descriptionAr}
-            onChange={(event) => setForm((prev) => ({ ...prev, descriptionAr: event.target.value }))}
-          />
-        </label>
-
-        <label className="field">
-          <span className="label">English description (optional)</span>
-          <textarea
-            className="textarea"
-            minLength={20}
-            maxLength={5000}
-            value={form.descriptionEn}
-            onChange={(event) => setForm((prev) => ({ ...prev, descriptionEn: event.target.value }))}
-          />
-        </label>
-
-        <section className="card">
-          <h3>Images</h3>
-          <p className="muted-text">Upload image files to S3 or add manual URLs as fallback.</p>
-
-          <div className="stack">
-            <label className="field">
-              <span className="label">Select image files (max 10, 8MB each)</span>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+        {step === 1 ? (
+          <div className="space-y-4">
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('رفع الصور', 'Upload Images')}</span>
               <input
-                className="input"
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                onChange={(event) => void onPickImages(event)}
+                className={`w-full rounded-xl border border-dashed px-3 py-6 text-sm ${
+                  errors.images ? 'border-rose-500 bg-rose-50' : 'border-slate-300'
+                }`}
               />
+              {uploadingImages ? <p className="text-xs text-muted">{pick('جارٍ رفع الصور...', 'Uploading images...')}</p> : null}
+              {errors.images ? <p className="text-xs text-rose-600">{errors.images}</p> : null}
             </label>
 
-            <div className="button-row">
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={handleUploadSelectedImages}
-                disabled={uploadingImages || selectedFiles.length === 0}
-              >
-                {uploadingImages ? 'Uploading...' : 'Upload selected images'}
-              </button>
-            </div>
-
-            <div className="list">
-              {uploadedImages.map((url) => (
-                <div key={url} className="row">
-                  <div className="row__meta">{url}</div>
-                  <div className="button-row">
-                    <button
-                      type="button"
-                      className="button button--danger"
-                      onClick={() => handleRemoveUploadedImage(url)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
+            <div className="grid grid-cols-4 gap-2">
+              {draft.images.slice(0, 8).map((image) => (
+                <img key={image} src={image} alt="" className="h-20 w-full rounded-lg object-cover" />
               ))}
-              {uploadedImages.length === 0 ? (
-                <p className="muted-text">No uploaded images yet.</p>
-              ) : null}
             </div>
 
-            <label className="field">
-              <span className="label">Manual image URLs (optional, one per line)</span>
-              <textarea
-                className="textarea"
-                value={form.manualUrlsText}
-                onChange={(event) => setForm((prev) => ({ ...prev, manualUrlsText: event.target.value }))}
-                placeholder="https://example.com/a.jpg&#10;https://example.com/b.jpg"
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('العنوان', 'Title')}</span>
+              <input
+                value={draft.title}
+                onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
+                className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                  errors.title ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                }`}
               />
+              {errors.title ? <p className="text-xs text-rose-600">{errors.title}</p> : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('الوصف', 'Description')}</span>
+              <textarea
+                value={draft.description}
+                onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
+                className={`min-h-32 w-full rounded-xl border px-3 py-2 text-sm ${
+                  errors.description ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                }`}
+              />
+              {errors.description ? <p className="text-xs text-rose-600">{errors.description}</p> : null}
             </label>
           </div>
-        </section>
+        ) : null}
 
-        {attributes.length > 0 ? (
-          <section className="card">
-            <h3>Dynamic Attributes</h3>
-            <div className="grid grid--2">
-              {attributes.map((attribute) => (
-                <label key={attribute.id} className="field">
-                  <span className="label">
-                    {attribute.name}
-                    {attribute.isRequired ? ' *' : ''}
-                  </span>
-                  <input
-                    className="input"
-                    required={attribute.isRequired}
-                    value={attributeValues[attribute.id] ?? ''}
-                    onChange={(event) =>
-                      setAttributeValues((prev) => ({
-                        ...prev,
-                        [attribute.id]: event.target.value,
-                      }))
-                    }
-                    placeholder={attribute.options.length > 0 ? attribute.options.join(', ') : undefined}
-                  />
-                </label>
-              ))}
+        {step === 2 ? (
+          <div className="space-y-4">
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('الفئة', 'Category')}</span>
+              <select
+                value={draft.categorySlug}
+                onChange={(event) => setDraft((prev) => ({ ...prev, categorySlug: event.target.value }))}
+                className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                  errors.categorySlug ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                }`}
+              >
+                <option value="">{pick('اختر الفئة', 'Select category')}</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.slug}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              {errors.categorySlug ? <p className="text-xs text-rose-600">{errors.categorySlug}</p> : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('الفئة الفرعية', 'Subcategory')}</span>
+              <select
+                value={draft.subcategoryId}
+                onChange={(event) => setDraft((prev) => ({ ...prev, subcategoryId: event.target.value }))}
+                className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                  errors.subcategoryId ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                }`}
+                disabled={!draft.categorySlug}
+              >
+                <option value="">{pick('اختر الفئة الفرعية', 'Select subcategory')}</option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
+              {errors.subcategoryId ? <p className="text-xs text-rose-600">{errors.subcategoryId}</p> : null}
+            </label>
+
+            {attributes.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {attributes.map((attribute) => (
+                  <label key={attribute.id} className="space-y-2">
+                    <span className="text-sm font-medium text-ink">{attribute.name}</span>
+                    <input
+                      value={draft.attributes[attribute.id] ?? ''}
+                      onChange={(event) => updateAttribute(attribute.id, event.target.value)}
+                      className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('السعر', 'Price')}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.price}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, price: event.target.value }))}
+                  className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                    errors.price ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                  }`}
+                />
+                {errors.price ? <p className="text-xs text-rose-600">{errors.price}</p> : null}
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('العملة', 'Currency')}</span>
+                <input
+                  value={draft.currency}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, currency: event.target.value.toUpperCase() }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                />
+              </label>
             </div>
-          </section>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-ink">{pick('الحالة', 'Condition')}</span>
+              <select
+                value={draft.condition}
+                onChange={(event) => setDraft((prev) => ({ ...prev, condition: event.target.value as ListingCondition }))}
+                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+              >
+                <option value="NEW">{pick('جديد', 'New')}</option>
+                <option value="USED">{pick('مستعمل', 'Used')}</option>
+              </select>
+            </label>
+          </div>
         ) : null}
 
-        <div className="inline">
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={form.negotiable}
-              onChange={(event) => setForm((prev) => ({ ...prev, negotiable: event.target.checked }))}
-            />
-            Negotiable
-          </label>
+        {step === 3 ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('الدولة', 'Country')}</span>
+                <select
+                  value={draft.countryId}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, countryId: event.target.value }))}
+                  className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                    errors.countryId ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                  }`}
+                >
+                  <option value="">{pick('اختر الدولة', 'Select country')}</option>
+                  {countries.map((country) => (
+                    <option key={country.id} value={country.id}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.countryId ? <p className="text-xs text-rose-600">{errors.countryId}</p> : null}
+              </label>
 
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={form.phoneVisibility}
-              onChange={(event) => setForm((prev) => ({ ...prev, phoneVisibility: event.target.checked }))}
-            />
-            Phone visible
-          </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('المدينة', 'City')}</span>
+                <select
+                  value={draft.cityId}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, cityId: event.target.value }))}
+                  className={`h-11 w-full rounded-xl border px-3 text-sm ${
+                    errors.cityId ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
+                  }`}
+                  disabled={!draft.countryId}
+                >
+                  <option value="">{pick('اختر المدينة', 'Select city')}</option>
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.cityId ? <p className="text-xs text-rose-600">{errors.cityId}</p> : null}
+              </label>
+            </div>
 
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={form.whatsappVisibility}
-              onChange={(event) => setForm((prev) => ({ ...prev, whatsappVisibility: event.target.checked }))}
-            />
-            WhatsApp visible
-          </label>
-        </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('خط العرض', 'Latitude')}</span>
+                <input
+                  value={draft.latitude}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, latitude: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="24.7136"
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('خط الطول', 'Longitude')}</span>
+                <input
+                  value={draft.longitude}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, longitude: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="46.6753"
+                />
+              </label>
+            </div>
 
-        {error ? <p className="error-text">{error}</p> : null}
-        {successMessage ? <p className="success-text">{successMessage}</p> : null}
-        {createdListingId ? (
-          <p className="muted-text">
-            Listing reference: #{createdListingId}. Public details page only works when status becomes ACTIVE.
-          </p>
+            <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-muted">
+              {pick('محدد الموقع (Map Picker) سيظهر هنا', 'Map Picker will appear here')}
+            </div>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-ink">{pick('إظهار الهاتف', 'Phone visibility')}</legend>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.phoneVisibility === 'hidden'}
+                  onChange={() => setDraft((prev) => ({ ...prev, phoneVisibility: 'hidden' }))}
+                />
+                {pick('مخفي', 'Hidden')}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.phoneVisibility === 'visible'}
+                  onChange={() => setDraft((prev) => ({ ...prev, phoneVisibility: 'visible' }))}
+                />
+                {pick('ظاهر', 'Visible')}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="radio"
+                  checked={draft.phoneVisibility === 'approval'}
+                  onChange={() => setDraft((prev) => ({ ...prev, phoneVisibility: 'approval' }))}
+                />
+                {pick('بعد الموافقة', 'After Approval')}
+              </label>
+            </fieldset>
+          </div>
         ) : null}
 
-        <div className="button-row">
-          <button type="submit" className="button button--primary" disabled={loading || uploadingImages}>
-            {loading ? 'Submitting...' : 'Submit listing'}
+        {step === 4 ? (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-ink">{pick('معاينة الإعلان', 'Listing Preview')}</h2>
+            <div className="max-w-sm">
+              <ListingCard
+                id="preview"
+                title={draft.title || pick('عنوان الإعلان', 'Listing title')}
+                price={previewPrice}
+                currency={draft.currency}
+                location={cities.find((city) => String(city.id) === draft.cityId)?.name || pick('المدينة', 'City')}
+                imageUrl={draft.images[0]}
+                badge={pick('معاينة', 'Preview')}
+                locale={locale}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void publish()}
+              disabled={publishLoading}
+              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-900 disabled:opacity-60"
+            >
+              {publishLoading ? pick('جارٍ النشر...', 'Publishing...') : pick('نشر الإعلان', 'Publish Listing')}
+            </button>
+            {createdListingId ? (
+              <p className="text-sm font-medium text-emerald-700">
+                {pick('رقم الإعلان', 'Listing ID')}: {createdListingId}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      {statusMessage ? <p className="text-sm text-emerald-700">{statusMessage}</p> : null}
+
+      <footer className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={previousStep}
+          disabled={step === 1}
+          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+        >
+          {pick('السابق', 'Back')}
+        </button>
+        {step < STEP_TITLES.length ? (
+          <button
+            type="button"
+            onClick={nextStep}
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600"
+          >
+            {pick('التالي', 'Next')}
           </button>
-          <Link className="button button--ghost" to="/">
-            Cancel
-          </Link>
-        </div>
-      </form>
+        ) : null}
+      </footer>
     </section>
   );
 }
