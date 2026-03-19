@@ -17,6 +17,8 @@ import {
     deleteBlacklistEntryForAdmin,
     featureListingByAdmin,
     getAdminDashboardStats,
+    getAdminSystemConfig,
+    listDisputes,
     listBlacklistEntriesForAdmin,
     listAuditLogs,
     listFraudFlags,
@@ -28,6 +30,7 @@ import {
     resolveReport,
     resolveIdentityVerification,
     updateBlacklistEntryForAdmin,
+    updateAdminSystemConfig,
 } from './admin.service.js';
 
 function requireAdminId(req: Request): number {
@@ -48,6 +51,31 @@ export async function dashboardController(req: Request, res: Response, next: Nex
         res.json({
             success: true,
             data: stats,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getAdminConfigController(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const config = await getAdminSystemConfig();
+        res.json({
+            success: true,
+            data: config,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function updateAdminConfigController(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const adminId = requireAdminId(req);
+        const updated = await updateAdminSystemConfig(adminId, req.body);
+        res.json({
+            success: true,
+            data: updated,
         });
     } catch (error) {
         next(error);
@@ -122,6 +150,24 @@ export async function listFraudFlagsController(
     try {
         const lang = getRequestLanguage(req);
         const result = await listFraudFlags(req.query, lang);
+        res.json({
+            success: true,
+            data: result.items,
+            meta: result.meta,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function listDisputesController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> {
+    try {
+        const lang = getRequestLanguage(req);
+        const result = await listDisputes(req.query, lang);
         res.json({
             success: true,
             data: result.items,

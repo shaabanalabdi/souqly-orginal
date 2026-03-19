@@ -8,9 +8,11 @@ import {
     dashboardController,
     deleteBlacklistController,
     featureListingController,
+    getAdminConfigController,
     getSavedSearchDigestStatusController,
     listIdentityVerificationsController,
     listBlacklistController,
+    listDisputesController,
     listFraudFlagsController,
     listSavedSearchDigestHistoryController,
     listAuditLogsController,
@@ -21,6 +23,7 @@ import {
     resolveReportController,
     resolveIdentityVerificationController,
     runSavedSearchDigestController,
+    updateAdminConfigController,
     updateBlacklistController,
 } from './admin.controller.js';
 import {
@@ -32,6 +35,7 @@ import {
     listIdentityVerificationQuerySchema,
     listBlacklistQuerySchema,
     listFraudFlagsQuerySchema,
+    listDisputesQuerySchema,
     moderateListingBodySchema,
     moderateUserBodySchema,
     paginationQuerySchema,
@@ -39,6 +43,7 @@ import {
     runSavedSearchDigestBodySchema,
     resolveIdentityVerificationBodySchema,
     savedSearchDigestHistoryQuerySchema,
+    updateAdminConfigBodySchema,
     updateBlacklistBodySchema,
 } from './admin.validation.js';
 
@@ -47,7 +52,15 @@ const adminRoutes = Router();
 adminRoutes.use('/admin', authenticate, authorize(StaffRole.ADMIN, StaffRole.MODERATOR));
 
 adminRoutes.get('/admin/dashboard', dashboardController);
+adminRoutes.get('/admin/config', authorize(StaffRole.ADMIN), getAdminConfigController);
+adminRoutes.patch(
+    '/admin/config',
+    authorize(StaffRole.ADMIN),
+    validate({ body: updateAdminConfigBodySchema }),
+    updateAdminConfigController,
+);
 adminRoutes.get('/admin/reports', validate({ query: paginationQuerySchema }), listReportsController);
+adminRoutes.get('/admin/disputes', validate({ query: listDisputesQuerySchema }), listDisputesController);
 adminRoutes.get('/admin/audit-logs', validate({ query: auditLogQuerySchema }), listAuditLogsController);
 adminRoutes.get('/admin/fraud-flags', validate({ query: listFraudFlagsQuerySchema }), listFraudFlagsController);
 adminRoutes.get(

@@ -7,4 +7,10 @@ export const subscribeBodySchema = z.object({
     autoRenew: z.boolean().optional().default(false),
 });
 
+export const confirmSubscriptionCheckoutBodySchema = z.object({
+    checkoutToken: z.string().trim().min(16).max(120),
+    providerRef: z.string().trim().min(3).max(120).optional(),
+});
+
 export type SubscribeBody = z.infer<typeof subscribeBodySchema>;
+export type ConfirmSubscriptionCheckoutBody = z.infer<typeof confirmSubscriptionCheckoutBodySchema>;

@@ -14,4 +14,26 @@ export const upsertCraftsmanProfileBodySchema = z.object({
     availableNow: z.boolean().optional(),
 });
 
+export const craftsmanIdParamsSchema = z.object({
+    id: z.coerce.number().int().positive(),
+});
+
+export const craftsmanListingsQuerySchema = z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+export const craftsmanLeadsQuerySchema = z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+const craftsmanLeadSourceValues = ['chat', 'phone', 'whatsapp', 'direct'] as const;
+
+export const craftsmanLeadBodySchema = z.object({
+    source: z.enum(craftsmanLeadSourceValues),
+    message: z.string().trim().max(500).optional(),
+});
+
 export type UpsertCraftsmanProfileBody = z.infer<typeof upsertCraftsmanProfileBodySchema>;
+export type CreateCraftsmanLeadBody = z.infer<typeof craftsmanLeadBodySchema>;

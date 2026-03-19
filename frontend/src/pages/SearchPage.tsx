@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ListingCard } from '../components/ListingCard';
 import { ListingGridSkeleton } from '../components/ListingGridSkeleton';
 import { EmptyState } from '../components/EmptyState';
+import { Button, ErrorStatePanel, Tabs } from '../components/ui';
 import { categoriesService } from '../services/categories.service';
 import { geoService } from '../services/geo.service';
 import { listingsService } from '../services/listings.service';
@@ -17,10 +18,30 @@ import type {
 } from '../types/domain';
 import { useLocaleSwitch } from '../utils/localeSwitch';
 import { filterTargetMarketCountries } from '../constants/market';
+import { addRecentlyViewedListingId } from '../utils/recentlyViewed';
 
 type ViewMode = 'list' | 'map';
 type ConditionFilter = 'all' | ListingCondition;
 type SortFilter = NonNullable<ListingQuery['sort']>;
+
+interface MapPoint {
+  id: number | string;
+  title: string;
+  price: number;
+  currency: string;
+  location: string;
+  imageUrl?: string;
+  badge?: string;
+  x: number;
+  y: number;
+}
+
+interface MapCluster {
+  key: string;
+  x: number;
+  y: number;
+  points: MapPoint[];
+}
 
 const PAGE_SIZE = 12;
 
@@ -36,6 +57,22 @@ function mapListing(listing: ListingSummary) {
   };
 }
 
+function seedFromId(id: number | string): number {
+  const text = String(id);
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function pinPositionFromId(id: number | string): { x: number; y: number } {
+  const seed = seedFromId(id);
+  const x = 8 + (seed % 84);
+  const y = 10 + (Math.floor(seed / 97) % 78);
+  return { x, y };
+}
+
 export function SearchPage() {
   const navigate = useNavigate();
   const { pick, locale } = useLocaleSwitch();
@@ -45,14 +82,17 @@ export function SearchPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [nearMeLoading, setNearMeLoading] = useState(false);
   const [favorites, setFavorites] = useState<Array<number | string>>([]);
+  const [selectedMapPointId, setSelectedMapPointId] = useState<number | string | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [cities, setCities] = useState<Array<{ id: number; name: string }>>([]);
-  const [items, setItems] = useState<ListingSummary[]>([]);
+  const [appendedItems, setAppendedItems] = useState<ListingSummary[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [autoLoadingNextPage, setAutoLoadingNextPage] = useState(false);
+  const infiniteTriggerRef = useRef<HTMLDivElement | null>(null);
 
   const q = searchParams.get('q') ?? '';
   const categorySlug = searchParams.get('category') ?? '';
@@ -222,15 +262,21 @@ export function SearchPage() {
           withImages: true,
           featuredOnly: featuredOnly || undefined,
         });
-        setItems(result.items);
+        setAppendedItems((prev) => {
+          if (page <= 1) return result.items;
+          const currentIds = new Set(prev.map((item) => item.id));
+          const toAppend = result.items.filter((item) => !currentIds.has(item.id));
+          return [...prev, ...toAppend];
+        });
         setTotalPages(Math.max(1, result.meta.totalPages));
         setTotalItems(result.meta.total);
       } catch (error) {
         setErrorMessage(asHttpError(error).message);
-        setItems([]);
+        setAppendedItems([]);
         setTotalItems(0);
       } finally {
         setLoading(false);
+        setAutoLoadingNextPage(false);
       }
     };
 
@@ -249,7 +295,99 @@ export function SearchPage() {
     page,
   ]);
 
-  const mappedListings = useMemo(() => items.map(mapListing), [items]);
+  const mappedInfiniteListings = useMemo(() => appendedItems.map(mapListing), [appendedItems]);
+  const hasMorePages = page < totalPages;
+
+  const mapPoints = useMemo<MapPoint[]>(
+    () =>
+      mappedInfiniteListings.map((listing) => {
+        const position = pinPositionFromId(listing.id);
+        return {
+          ...listing,
+          x: position.x,
+          y: position.y,
+        };
+      }),
+    [mappedInfiniteListings],
+  );
+
+  const mapClusters = useMemo<MapCluster[]>(() => {
+    const bucket = new Map<string, MapCluster>();
+    mapPoints.forEach((point) => {
+      const xCell = Math.floor(point.x / 12);
+      const yCell = Math.floor(point.y / 12);
+      const key = `${xCell}-${yCell}`;
+      const existing = bucket.get(key);
+      if (existing) {
+        existing.points.push(point);
+        return;
+      }
+      bucket.set(key, {
+        key,
+        x: point.x,
+        y: point.y,
+        points: [point],
+      });
+    });
+    return Array.from(bucket.values());
+  }, [mapPoints]);
+
+  const selectedMapPoint = useMemo(() => {
+    if (selectedMapPointId == null) return null;
+    return mapPoints.find((point) => point.id === selectedMapPointId) ?? null;
+  }, [mapPoints, selectedMapPointId]);
+
+  const openListing = (id: number | string) => {
+    const parsed = Number(id);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      addRecentlyViewedListingId(parsed);
+    }
+    navigate(`/listings/${id}`);
+  };
+
+  useEffect(() => {
+    if (viewMode !== 'map') return;
+    if (mapPoints.length === 0) {
+      setSelectedMapPointId(null);
+      return;
+    }
+
+    if (selectedMapPointId == null) {
+      setSelectedMapPointId(mapPoints[0].id);
+      return;
+    }
+
+    const stillExists = mapPoints.some((point) => point.id === selectedMapPointId);
+    if (!stillExists) {
+      setSelectedMapPointId(mapPoints[0].id);
+    }
+  }, [mapPoints, selectedMapPointId, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'list') return;
+    if (!hasMorePages) return;
+    if (!infiniteTriggerRef.current) return;
+
+    const target = infiniteTriggerRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (!first?.isIntersecting) return;
+        if (loading || autoLoadingNextPage) return;
+
+        setAutoLoadingNextPage(true);
+        setParam('page', String(Math.min(totalPages, page + 1)));
+      },
+      {
+        root: null,
+        rootMargin: '200px',
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [autoLoadingNextPage, hasMorePages, loading, page, totalPages, viewMode]);
 
   return (
     <div className="space-y-6">
@@ -257,29 +395,32 @@ export function SearchPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-black text-ink">{pick('نتائج البحث', 'Search Results')}</h1>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-slate-50"
-              onClick={() => void handleNearMe()}
-              disabled={nearMeLoading}
-            >
+            <Button variant="secondary" onClick={() => void handleNearMe()} isLoading={nearMeLoading}>
               {nearMeLoading ? pick('جارٍ التحديد...', 'Locating...') : pick('بالقرب مني', 'Near Me')}
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-slate-50"
-              onClick={() => setParam('view', viewMode === 'list' ? 'map' : 'list')}
-            >
-              {viewMode === 'list' ? pick('عرض الخريطة', 'Map View') : pick('عرض القائمة', 'List View')}
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-slate-50"
-              onClick={clearFilters}
-            >
+            </Button>
+            <Button variant="ghost" onClick={clearFilters}>
               {pick('تصفير الفلاتر', 'Clear Filters')}
-            </button>
+            </Button>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <Tabs
+            activeKey={viewMode}
+            onChange={(key) => setParam('view', key as ViewMode)}
+            items={[
+              {
+                key: 'list',
+                label: pick('عرض القائمة', 'List View'),
+                icon: <span className="material-symbols-outlined text-base">view_list</span>,
+              },
+              {
+                key: 'map',
+                label: pick('عرض الخريطة', 'Map View'),
+                icon: <span className="material-symbols-outlined text-base">map</span>,
+              },
+            ]}
+          />
         </div>
 
         <p className="mt-2 text-sm text-muted">
@@ -531,21 +672,94 @@ export function SearchPage() {
 
         <div className="space-y-4">
           {viewMode === 'map' ? (
-            <div className="flex h-[360px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-muted shadow-soft">
-              {pick('الخريطة ستظهر هنا', 'Map will be displayed here')}
+            <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
+              <div className="relative h-[560px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,#dbeafe_0%,#eff6ff_35%,#f8fafc_100%)]" />
+                <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] [background-size:36px_36px]" />
+
+                {mapClusters.map((cluster) => {
+                  const isSingle = cluster.points.length === 1;
+                  const primaryPoint = cluster.points[0];
+                  const isSelected = isSingle && selectedMapPointId === primaryPoint.id;
+
+                  return (
+                    <button
+                      key={cluster.key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMapPointId(primaryPoint.id);
+                      }}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border text-xs font-bold shadow transition ${
+                        isSingle
+                          ? isSelected
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-blue-200 bg-white text-primary hover:bg-blue-50'
+                          : 'border-amber-300 bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      }`}
+                      style={{ left: `${cluster.x}%`, top: `${cluster.y}%`, width: isSingle ? '30px' : '38px', height: isSingle ? '30px' : '38px' }}
+                      aria-label={isSingle ? primaryPoint.title : `${cluster.points.length} listings`}
+                    >
+                      {isSingle ? <span className="material-symbols-outlined text-sm">location_on</span> : cluster.points.length}
+                    </button>
+                  );
+                })}
+
+                {selectedMapPoint ? (
+                  <div className="absolute bottom-3 left-3 right-3 rounded-xl border border-slate-200 bg-white p-3 shadow-md">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={selectedMapPoint.imageUrl || 'https://picsum.photos/seed/souqly-map-fallback/120/90'}
+                        alt=""
+                        className="h-16 w-20 rounded-lg object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-ink">{selectedMapPoint.title}</p>
+                        <p className="text-xs text-muted">{selectedMapPoint.location}</p>
+                        <p className="text-sm font-bold text-primary">
+                          {new Intl.NumberFormat(locale, {
+                            style: 'currency',
+                            currency: selectedMapPoint.currency,
+                            maximumFractionDigits: 0,
+                          }).format(selectedMapPoint.price)}
+                        </p>
+                      </div>
+                      <Button size="sm" onClick={() => openListing(selectedMapPoint.id)}>
+                        {pick('عرض', 'Open')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <aside className="h-[560px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-soft">
+                <h3 className="mb-3 text-sm font-bold text-ink">{pick('نتائج على الخريطة', 'Map Results')}</h3>
+                <div className="space-y-2">
+                  {mapPoints.map((point) => (
+                    <button
+                      key={`map-side-${point.id}`}
+                      type="button"
+                      onClick={() => setSelectedMapPointId(point.id)}
+                      className={`w-full rounded-xl border p-2 text-start transition ${selectedMapPointId === point.id ? 'border-primary bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                    >
+                      <p className="truncate text-sm font-semibold text-ink">{point.title}</p>
+                      <p className="text-xs text-muted">{point.location}</p>
+                    </button>
+                  ))}
+                </div>
+              </aside>
             </div>
           ) : null}
 
-          {loading ? (
+          {viewMode === 'list' && loading && page === 1 ? (
             <ListingGridSkeleton />
-          ) : mappedListings.length === 0 ? (
+          ) : viewMode === 'list' && mappedInfiniteListings.length === 0 ? (
             <EmptyState
               title={pick('لا توجد نتائج', 'No Results')}
               description={pick('لا توجد إعلانات مطابقة للفلاتر الحالية.', 'No listings match the active filters.')}
             />
-          ) : (
+          ) : viewMode === 'list' ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {mappedListings.map((listing) => (
+              {mappedInfiniteListings.map((listing) => (
                 <ListingCard
                   key={listing.id}
                   id={listing.id}
@@ -557,38 +771,44 @@ export function SearchPage() {
                   badge={listing.badge}
                   locale={locale}
                   isFavorite={favorites.includes(listing.id)}
-                  onOpen={(id) => navigate(`/listings/${id}`)}
+                  onOpen={openListing}
                   onToggleFavorite={(id, nextState) =>
                     setFavorites((prev) => (nextState ? [...prev, id] : prev.filter((favId) => favId !== id)))
                   }
                 />
               ))}
             </div>
-          )}
+          ) : null}
 
-          {errorMessage ? <p className="text-sm text-amber-700">{errorMessage}</p> : null}
+          {errorMessage ? (
+            <ErrorStatePanel
+              title={pick('حدث خطأ في تحميل النتائج', 'Failed to load results')}
+              message={errorMessage}
+              action={(
+                <Button variant="secondary" onClick={() => setParam('page', String(page))}>
+                  {pick('إعادة المحاولة', 'Retry')}
+                </Button>
+              )}
+            />
+          ) : null}
 
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setParam('page', String(Math.max(1, page - 1)))}
-              disabled={page === 1}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:opacity-40"
-            >
-              {pick('السابق', 'Prev')}
-            </button>
-            <span className="text-sm text-muted">
-              {pick('صفحة', 'Page')} {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setParam('page', String(Math.min(totalPages, page + 1)))}
-              disabled={page === totalPages}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:opacity-40"
-            >
-              {pick('التالي', 'Next')}
-            </button>
-          </div>
+          {viewMode === 'list' ? <div ref={infiniteTriggerRef} className="h-1 w-full" aria-hidden /> : null}
+
+          {viewMode === 'list' && hasMorePages ? (
+            <div className="flex items-center justify-center">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setAutoLoadingNextPage(true);
+                  setParam('page', String(Math.min(totalPages, page + 1)));
+                }}
+                isLoading={loading || autoLoadingNextPage}
+                disabled={loading || autoLoadingNextPage}
+              >
+                {loading || autoLoadingNextPage ? pick('جارٍ التحميل...', 'Loading...') : pick('تحميل المزيد', 'Load More')}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

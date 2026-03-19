@@ -5,8 +5,11 @@ import { validate } from '../../shared/middleware/validate.js';
 import {
     createOfferController,
     createThreadController,
+    getPhoneRequestStateController,
+    listMyOffersController,
     listMyThreadsController,
     listThreadMessagesController,
+    respondPhoneRequestController,
     requestPhoneController,
     respondOfferController,
     sendMessageController,
@@ -15,9 +18,11 @@ import {
 import {
     createOfferBodySchema,
     createThreadBodySchema,
+    listOffersQuerySchema,
     offerIdParamsSchema,
     paginationQuerySchema,
     phoneRequestBodySchema,
+    phoneRequestResponseBodySchema,
     respondOfferBodySchema,
     sendMessageBodySchema,
     threadIdParamsSchema,
@@ -27,6 +32,7 @@ const chatRoutes = Router();
 
 chatRoutes.use(authenticate);
 
+chatRoutes.get('/chats/offers', validate({ query: listOffersQuerySchema }), listMyOffersController);
 chatRoutes.get('/chats/threads', validate({ query: paginationQuerySchema }), listMyThreadsController);
 chatRoutes.get('/chats/unread-count', unreadCountController);
 chatRoutes.post('/chats/threads', validate({ body: createThreadBodySchema }), createThreadController);
@@ -46,6 +52,17 @@ chatRoutes.post(
     chatMessageLimiter,
     validate({ params: threadIdParamsSchema, body: phoneRequestBodySchema }),
     requestPhoneController,
+);
+chatRoutes.get(
+    '/chats/threads/:threadId/phone-request',
+    validate({ params: threadIdParamsSchema }),
+    getPhoneRequestStateController,
+);
+chatRoutes.patch(
+    '/chats/threads/:threadId/phone-request',
+    chatMessageLimiter,
+    validate({ params: threadIdParamsSchema, body: phoneRequestResponseBodySchema }),
+    respondPhoneRequestController,
 );
 chatRoutes.post(
     '/chats/threads/:threadId/offers',

@@ -20,7 +20,7 @@ describe('Verification routes', () => {
             status: 'PENDING',
             documentType: 'NATIONAL_ID',
             documentNumberMasked: '****1234',
-            documentFrontUrl: 'https://cdn.souqly.dev/id-front.jpg',
+            documentFrontUrl: 'https://cdn.souqly.com/verification/id-front.jpg',
             documentBackUrl: null,
             selfieUrl: null,
             note: 'Please review quickly.',
@@ -58,9 +58,9 @@ describe('Verification routes', () => {
             status: 'PENDING',
             documentType: 'PASSPORT',
             documentNumberMasked: '***7788',
-            documentFrontUrl: 'https://cdn.souqly.dev/passport-front.jpg',
+            documentFrontUrl: 'https://cdn.souqly.com/verification/passport-front.jpg',
             documentBackUrl: null,
-            selfieUrl: 'https://cdn.souqly.dev/selfie.jpg',
+            selfieUrl: 'https://cdn.souqly.com/verification/selfie.jpg',
             note: 'My passport document.',
             submittedAt: new Date('2026-03-12T10:10:00.000Z'),
             reviewedAt: null,
@@ -77,8 +77,8 @@ describe('Verification routes', () => {
             .send({
                 documentType: 'PASSPORT',
                 documentNumberMasked: '***7788',
-                documentFrontUrl: 'https://cdn.souqly.dev/passport-front.jpg',
-                selfieUrl: 'https://cdn.souqly.dev/selfie.jpg',
+                documentFrontUrl: 'https://cdn.souqly.com/verification/passport-front.jpg',
+                selfieUrl: 'https://cdn.souqly.com/verification/selfie.jpg',
                 note: 'My passport document.',
             });
 
@@ -103,7 +103,7 @@ describe('Verification routes', () => {
             .set('Authorization', `Bearer ${accessToken}`)
             .send({
                 documentType: 'NATIONAL_ID',
-                documentFrontUrl: 'https://cdn.souqly.dev/id-front.jpg',
+                documentFrontUrl: 'https://cdn.souqly.com/verification/id-front.jpg',
             });
 
         expect(response.status).toBe(409);

@@ -7,4 +7,18 @@ export const upsertBusinessProfileBodySchema = z.object({
     website: z.string().trim().url().max(300).optional(),
 });
 
+export const storeIdParamsSchema = z.object({
+    storeId: z.coerce.number().int().positive(),
+});
+
+export const storeListingsQuerySchema = z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+export const storeAnalyticsQuerySchema = z.object({
+    from: z.string().trim().min(10).max(64).optional(),
+    to: z.string().trim().min(10).max(64).optional(),
+});
+
 export type UpsertBusinessProfileBody = z.infer<typeof upsertBusinessProfileBodySchema>;

@@ -10,14 +10,7 @@ import {
 import { asHttpError, setAuthToken } from '../services/http';
 import type { SessionUser } from '../types/domain';
 
-const ACCESS_TOKEN_STORAGE_KEY = 'souqly_access_token';
-
 function saveAccessToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-  } else {
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-  }
   setAuthToken(token);
 }
 
@@ -71,11 +64,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     set({ isLoading: true, error: null });
-    const existingToken = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
-    if (existingToken) {
-      saveAccessToken(existingToken);
-      set({ accessToken: existingToken });
-    }
 
     try {
       const user = await authService.me();

@@ -3,12 +3,27 @@ import { useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { chatsService } from '../services/chats.service';
 import { asHttpError } from '../services/http';
-import type { ChatMessage, ThreadSummary } from '../types/domain';
+import {
+  connectChatSocket,
+  emitTypingUpdated,
+  joinThreadRoom,
+  leaveThreadRoom,
+  onChatSocketError,
+  onMessageCreated,
+  onOfferUpdated,
+  onThreadCreated,
+  onTypingUpdated,
+} from '../services/socket';
+import { useAuthStore } from '../store/authStore';
+import type { ChatMessage, ContactRequestState, ThreadSummary } from '../types/domain';
 import { formatDate } from '../utils/format';
 import { useLocaleSwitch } from '../utils/localeSwitch';
+import { Button, EmptyStatePanel, ErrorStatePanel, Input, LoadingState } from '../components/ui';
 
 export function ChatPage() {
   const { pick } = useLocaleSwitch();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const currentUser = useAuthStore((state) => state.user);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -17,8 +32,11 @@ export function ChatPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [offerAmount, setOfferAmount] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [statusTone, setStatusTone] = useState<'success' | 'error' | 'info'>('info');
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [typingVisible, setTypingVisible] = useState(false);
+  const [phoneRequestState, setPhoneRequestState] = useState<ContactRequestState | null>(null);
 
   const selectedThreadId = Number(searchParams.get('thread') ?? '0') || null;
 
@@ -26,6 +44,9 @@ export function ChatPage() {
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
     [threads, selectedThreadId],
   );
+
+  const isBuyerInThread = Boolean(selectedThread && currentUser?.id === selectedThread.buyerId);
+  const isSellerInThread = Boolean(selectedThread && currentUser?.id === selectedThread.sellerId);
 
   const loadThreads = async () => {
     setLoadingThreads(true);
@@ -36,6 +57,7 @@ export function ChatPage() {
         setSearchParams({ thread: String(result.items[0].id) });
       }
     } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
     } finally {
       setLoadingThreads(false);
@@ -48,10 +70,20 @@ export function ChatPage() {
       const result = await chatsService.listMessages(threadId, 1, 200);
       setMessages(result.items);
     } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
       setMessages([]);
     } finally {
       setLoadingMessages(false);
+    }
+  };
+
+  const loadPhoneRequestState = async (threadId: number) => {
+    try {
+      const result = await chatsService.getPhoneRequestState(threadId);
+      setPhoneRequestState(result);
+    } catch {
+      setPhoneRequestState(null);
     }
   };
 
@@ -63,10 +95,114 @@ export function ChatPage() {
   useEffect(() => {
     if (!selectedThreadId) {
       setMessages([]);
+      setPhoneRequestState(null);
       return;
     }
+
     void loadMessages(selectedThreadId);
+    void loadPhoneRequestState(selectedThreadId);
   }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    connectChatSocket(accessToken);
+
+    const offThreadCreated = onThreadCreated((payload) => {
+      setThreads((prev) => {
+        const exists = prev.some((thread) => thread.id === payload.thread.id);
+        if (exists) {
+          return prev.map((thread) => (thread.id === payload.thread.id ? payload.thread : thread));
+        }
+        return [payload.thread, ...prev];
+      });
+    });
+
+    const offMessageCreated = onMessageCreated((payload) => {
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread.id === payload.threadId
+            ? {
+                ...thread,
+                lastMessageAt: payload.message.createdAt,
+                lastMessage: {
+                  senderId: payload.message.senderId,
+                  type: payload.message.type,
+                  content: payload.message.content,
+                  createdAt: payload.message.createdAt,
+                },
+              }
+            : thread,
+        ),
+      );
+
+      if (payload.threadId === selectedThreadId) {
+        setMessages((prev) => {
+          const exists = prev.some((message) => message.id === payload.message.id);
+          if (exists) return prev;
+          return [...prev, payload.message];
+        });
+
+        if (payload.message.type === 'PHONE_REQUEST' || payload.message.type === 'SYSTEM') {
+          void loadPhoneRequestState(payload.threadId);
+        }
+      }
+    });
+
+    const offOfferUpdated = onOfferUpdated((payload) => {
+      if (payload.threadId === selectedThreadId) {
+        setStatusTone('info');
+        setStatusMessage(pick('تم تحديث حالة العرض.', 'Offer status was updated.'));
+      }
+    });
+
+    const offTypingUpdated = onTypingUpdated((payload) => {
+      if (payload.threadId !== selectedThreadId) return;
+      if (payload.userId !== selectedThread?.otherUserId) return;
+      setTypingVisible(payload.isTyping);
+    });
+
+    const offSocketError = onChatSocketError((payload) => {
+      setStatusTone('error');
+      setStatusMessage(payload.code ? `Socket: ${payload.code}` : pick('تعذر تحديث المحادثة لحظيا.', 'Realtime sync failed.'));
+    });
+
+    return () => {
+      offThreadCreated();
+      offMessageCreated();
+      offOfferUpdated();
+      offTypingUpdated();
+      offSocketError();
+    };
+  }, [accessToken, pick, selectedThread, selectedThreadId]);
+
+  useEffect(() => {
+    if (!selectedThreadId) return;
+    joinThreadRoom(selectedThreadId);
+    return () => {
+      emitTypingUpdated(selectedThreadId, false);
+      leaveThreadRoom(selectedThreadId);
+    };
+  }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!accessToken || !selectedThreadId) return;
+
+    const hasDraft = messageText.trim().length > 0;
+    if (!hasDraft) {
+      emitTypingUpdated(selectedThreadId, false);
+      return;
+    }
+
+    emitTypingUpdated(selectedThreadId, true);
+    const timer = window.setTimeout(() => {
+      emitTypingUpdated(selectedThreadId, false);
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [accessToken, messageText, selectedThreadId]);
 
   const sendTextMessage = async () => {
     if (!selectedThreadId || !messageText.trim()) return;
@@ -76,6 +212,7 @@ export function ChatPage() {
       await loadMessages(selectedThreadId);
       await loadThreads();
     } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
     }
   };
@@ -87,7 +224,10 @@ export function ChatPage() {
       setImageUrl('');
       await loadMessages(selectedThreadId);
       await loadThreads();
+      setStatusTone('success');
+      setStatusMessage(pick('تم إرسال الصورة.', 'Image sent.'));
     } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
     }
   };
@@ -100,8 +240,10 @@ export function ChatPage() {
       await chatsService.createOffer(selectedThreadId, { amount: parsedAmount, quantity: 1 });
       setOfferAmount('');
       await loadMessages(selectedThreadId);
+      setStatusTone('success');
       setStatusMessage(pick('تم إرسال العرض.', 'Offer sent.'));
     } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
     }
   };
@@ -109,10 +251,34 @@ export function ChatPage() {
   const requestPhone = async () => {
     if (!selectedThreadId) return;
     try {
-      await chatsService.requestPhone(selectedThreadId, pick('أحتاج رقم الهاتف للتواصل.', 'I need phone number to continue.'));
+      await chatsService.requestPhone(
+        selectedThreadId,
+        pick('أحتاج رقم الهاتف لمتابعة التواصل.', 'I need the phone number to continue.'),
+      );
       await loadMessages(selectedThreadId);
+      await loadPhoneRequestState(selectedThreadId);
+      setStatusTone('success');
       setStatusMessage(pick('تم إرسال طلب الهاتف.', 'Phone request sent.'));
     } catch (error) {
+      setStatusTone('error');
+      setStatusMessage(asHttpError(error).message);
+    }
+  };
+
+  const respondPhoneRequest = async (action: 'approve' | 'reject') => {
+    if (!selectedThreadId) return;
+    try {
+      await chatsService.respondPhoneRequest(selectedThreadId, { action });
+      await loadMessages(selectedThreadId);
+      await loadPhoneRequestState(selectedThreadId);
+      setStatusTone('success');
+      setStatusMessage(
+        action === 'approve'
+          ? pick('تمت الموافقة على طلب الهاتف.', 'Phone request approved.')
+          : pick('تم رفض طلب الهاتف.', 'Phone request rejected.'),
+      );
+    } catch (error) {
+      setStatusTone('error');
       setStatusMessage(asHttpError(error).message);
     }
   };
@@ -122,22 +288,31 @@ export function ChatPage() {
     [messages],
   );
 
+  const phoneRequestSummary = phoneRequestState?.status === 'PENDING'
+    ? pick('طلب الهاتف قيد المراجعة.', 'Phone request is pending review.')
+    : phoneRequestState?.status === 'APPROVED'
+      ? pick('تمت الموافقة على إظهار بيانات التواصل.', 'Contact access has been approved.')
+      : phoneRequestState?.status === 'REJECTED'
+        ? pick('تم رفض طلب إظهار بيانات التواصل.', 'Contact access was rejected.')
+        : '';
+
   return (
     <section className="grid min-h-[70vh] gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-soft lg:grid-cols-[320px_1fr]">
       <aside className="rounded-xl border border-slate-200 bg-surface p-3">
         <header className="mb-3 flex items-center justify-between">
           <h1 className="text-lg font-black text-ink">{pick('صندوق المحادثات', 'Inbox')}</h1>
-          <button
-            type="button"
-            onClick={() => void loadThreads()}
-            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-          >
+          <Button variant="ghost" size="sm" onClick={() => void loadThreads()}>
             {pick('تحديث', 'Refresh')}
-          </button>
+          </Button>
         </header>
         <div className="space-y-2">
           {loadingThreads ? (
-            <p className="text-sm text-muted">{pick('جارٍ التحميل...', 'Loading...')}</p>
+            <LoadingState text={pick('جار تحميل المحادثات...', 'Loading inbox...')} />
+          ) : threads.length === 0 ? (
+            <EmptyStatePanel
+              title={pick('لا توجد محادثات بعد', 'No conversations yet')}
+              description={pick('عند بدء التراسل ستظهر المحادثات هنا.', 'Conversations will appear here once messaging starts.')}
+            />
           ) : (
             threads.map((thread) => (
               <button
@@ -179,32 +354,36 @@ export function ChatPage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void sendOffer()}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
-                >
+                <Button variant="ghost" size="sm" onClick={() => void sendOffer()}>
                   {pick('إرسال عرض', 'Send Offer')}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => void requestPhone()}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
+                  disabled={!isBuyerInThread || phoneRequestState?.status === 'PENDING' || phoneRequestState?.status === 'APPROVED'}
                 >
                   {pick('طلب الهاتف', 'Request Phone')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendImageMessage()}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50"
-                >
+                </Button>
+                {isSellerInThread && phoneRequestState?.status === 'PENDING' ? (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={() => void respondPhoneRequest('approve')}>
+                      {pick('موافقة', 'Approve')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void respondPhoneRequest('reject')}>
+                      {pick('رفض', 'Reject')}
+                    </Button>
+                  </>
+                ) : null}
+                <Button variant="ghost" size="sm" onClick={() => void sendImageMessage()}>
                   {pick('إرسال صورة', 'Send Image')}
-                </button>
+                </Button>
               </div>
             </header>
 
             <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-4">
-              {loadingMessages ? <p className="text-sm text-muted">{pick('جارٍ تحميل الرسائل...', 'Loading messages...')}</p> : null}
+              {loadingMessages ? <LoadingState text={pick('جار تحميل الرسائل...', 'Loading messages...')} /> : null}
+              {phoneRequestSummary ? <p className="text-xs text-muted">{phoneRequestSummary}</p> : null}
               {orderedMessages.map((message) => (
                 <article
                   key={message.id}
@@ -220,42 +399,51 @@ export function ChatPage() {
                   </p>
                 </article>
               ))}
+
+              {typingVisible ? (
+                <p className="text-xs text-muted">{pick('جار الكتابة...', 'Typing...')}</p>
+              ) : null}
             </div>
 
             <footer className="space-y-2 border-t border-slate-200 p-3">
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="text"
                   value={messageText}
                   onChange={(event) => setMessageText(event.target.value)}
                   placeholder={pick('اكتب رسالتك...', 'Write your message...')}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none ring-primary focus:ring-2"
+                  className="w-full"
                 />
-                <button
-                  type="button"
-                  onClick={() => void sendTextMessage()}
-                  className="h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-blue-900"
-                >
+                <Button onClick={() => void sendTextMessage()} size="md" disabled={!messageText.trim()}>
                   {pick('إرسال', 'Send')}
-                </button>
+                </Button>
               </div>
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="url"
                   value={imageUrl}
                   onChange={(event) => setImageUrl(event.target.value)}
                   placeholder={pick('رابط الصورة', 'Image URL')}
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  className="h-10 w-full"
                 />
-                <input
+                <Input
                   type="number"
                   value={offerAmount}
                   onChange={(event) => setOfferAmount(event.target.value)}
                   placeholder={pick('قيمة العرض', 'Offer amount')}
-                  className="h-10 w-36 rounded-xl border border-slate-200 px-3 text-sm"
+                  className="h-10 w-36"
                 />
               </div>
-              {statusMessage ? <p className="text-xs text-emerald-700">{statusMessage}</p> : null}
+              {statusMessage ? (
+                statusTone === 'error' ? (
+                  <ErrorStatePanel
+                    title={pick('فشل في تنفيذ الإجراء', 'Action failed')}
+                    message={statusMessage}
+                  />
+                ) : (
+                  <p className="text-xs text-emerald-700">{statusMessage}</p>
+                )
+              ) : null}
             </footer>
           </>
         ) : (

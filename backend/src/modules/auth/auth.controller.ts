@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
+import { buildCsrfCookieOptions, CSRF_TOKEN_COOKIE_NAME, issueCsrfCookie } from '../../shared/middleware/csrf.js';
 import {
     changePassword,
     loginWithFacebookOAuth,
@@ -34,6 +35,7 @@ function sendLoginSuccessResponse(res: Response, result: Awaited<ReturnType<type
         ...buildRefreshCookieBaseOptions(),
         maxAge: REFRESH_TOKEN_MAX_AGE_MS,
     });
+    issueCsrfCookie(res);
 
     res.json({
         success: true,
@@ -173,6 +175,7 @@ export async function refreshController(req: Request, res: Response, next: NextF
 
 export async function logoutController(_req: Request, res: Response): Promise<void> {
     res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, buildRefreshCookieBaseOptions());
+    res.clearCookie(CSRF_TOKEN_COOKIE_NAME, buildCsrfCookieOptions());
     res.json({
         success: true,
         data: {

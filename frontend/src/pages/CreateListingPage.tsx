@@ -8,6 +8,7 @@ import { asHttpError } from '../services/http';
 import type {
   AttributeDefinition,
   Category,
+  ContactVisibility as ListingContactVisibility,
   Country,
   ListingCondition,
   Subcategory,
@@ -31,6 +32,8 @@ interface ListingDraft {
   cityId: string;
   latitude: string;
   longitude: string;
+  phoneNumber: string;
+  whatsappNumber: string;
   phoneVisibility: ContactVisibility;
   whatsappVisibility: ContactVisibility;
 }
@@ -49,8 +52,10 @@ const INITIAL_DRAFT: ListingDraft = {
   cityId: '',
   latitude: '',
   longitude: '',
-  phoneVisibility: 'visible',
-  whatsappVisibility: 'visible',
+  phoneNumber: '',
+  whatsappNumber: '',
+  phoneVisibility: 'approval',
+  whatsappVisibility: 'approval',
 };
 
 const STEP_TITLES = [
@@ -60,8 +65,12 @@ const STEP_TITLES = [
   { ar: 'المراجعة والنشر', en: 'Review & Publish' },
 ];
 
-function normalizeVisibility(value: ContactVisibility): boolean {
-  return value === 'visible';
+function normalizeVisibility(value: ContactVisibility): ListingContactVisibility {
+  if (value === 'approval') {
+    return 'APPROVAL';
+  }
+
+  return value === 'visible' ? 'VISIBLE' : 'HIDDEN';
 }
 
 export function CreateListingPage() {
@@ -242,38 +251,51 @@ export function CreateListingPage() {
 
   const previewPrice = useMemo(() => Number(draft.price || 0), [draft.price]);
 
-  const publish = async () => {
+  const buildCreatePayload = (saveAsDraft: boolean) => {
+    const attributesPayload = attributes
+      .map((attribute) => ({
+        attributeDefinitionId: attribute.id,
+        value: (draft.attributes[attribute.id] ?? '').trim(),
+      }))
+      .filter((item) => item.value.length > 0);
+
+    return {
+      subcategoryId: Number(draft.subcategoryId),
+      countryId: Number(draft.countryId),
+      cityId: Number(draft.cityId),
+      titleAr: draft.title,
+      descriptionAr: draft.description,
+      priceAmount: Number(draft.price),
+      currency: draft.currency,
+      condition: draft.condition,
+      locationLat: draft.latitude ? Number(draft.latitude) : undefined,
+      locationLng: draft.longitude ? Number(draft.longitude) : undefined,
+      saveAsDraft,
+      phoneNumber: draft.phoneNumber.trim() || undefined,
+      whatsappNumber: draft.whatsappNumber.trim() || undefined,
+      phoneVisibility: normalizeVisibility(draft.phoneVisibility),
+      whatsappVisibility: normalizeVisibility(draft.whatsappVisibility),
+      images: draft.images,
+      attributes: attributesPayload,
+    };
+  };
+
+  const publish = async (saveAsDraft = false) => {
     if (!validateStep(3)) return;
 
     setPublishLoading(true);
     setStatusMessage('');
     try {
-      const attributesPayload = attributes
-        .map((attribute) => ({
-          attributeDefinitionId: attribute.id,
-          value: (draft.attributes[attribute.id] ?? '').trim(),
-        }))
-        .filter((item) => item.value.length > 0);
-
-      const created = await listingsService.create({
-        subcategoryId: Number(draft.subcategoryId),
-        countryId: Number(draft.countryId),
-        cityId: Number(draft.cityId),
-        titleAr: draft.title,
-        descriptionAr: draft.description,
-        priceAmount: Number(draft.price),
-        currency: draft.currency,
-        condition: draft.condition,
-        locationLat: draft.latitude ? Number(draft.latitude) : undefined,
-        locationLng: draft.longitude ? Number(draft.longitude) : undefined,
-        phoneVisibility: normalizeVisibility(draft.phoneVisibility),
-        whatsappVisibility: normalizeVisibility(draft.whatsappVisibility),
-        images: draft.images,
-        attributes: attributesPayload,
-      });
+      const created = await listingsService.create(buildCreatePayload(saveAsDraft));
 
       setCreatedListingId(created.id);
+      if (created.status === 'DRAFT') {
+        setStatusMessage(pick('تم حفظ الإعلان كمسودة.', 'Listing saved as draft.'));
+      }
       setStatusMessage(pick('تم نشر الإعلان بنجاح.', 'Listing published successfully.'));
+      if (created.status === 'DRAFT') {
+        setStatusMessage(pick('تم حفظ الإعلان كمسودة.', 'Listing saved as draft.'));
+      }
       setDraft(INITIAL_DRAFT);
       setStep(1);
       setErrors({});
@@ -519,6 +541,27 @@ export function CreateListingPage() {
               {pick('محدد الموقع (Map Picker) سيظهر هنا', 'Map Picker will appear here')}
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ', 'Phone Number')}</span>
+                <input
+                  value={draft.phoneNumber}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, phoneNumber: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="+963..."
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-ink">{pick('Ø±Ù‚Ù… ÙˆØ§ØªØ³Ø§Ø¨', 'WhatsApp Number')}</span>
+                <input
+                  value={draft.whatsappNumber}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, whatsappNumber: event.target.value }))}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"
+                  placeholder="+963..."
+                />
+              </label>
+            </div>
+
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium text-ink">{pick('إظهار الهاتف', 'Phone visibility')}</legend>
               <label className="flex items-center gap-2 text-sm text-ink">
@@ -592,6 +635,14 @@ export function CreateListingPage() {
                 locale={locale}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => void publish(true)}
+              disabled={publishLoading}
+              className="mb-3 rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              {publishLoading ? pick('جارٍ الحفظ...', 'Saving...') : pick('حفظ كمسودة', 'Save as Draft')}
+            </button>
             <button
               type="button"
               onClick={() => void publish()}

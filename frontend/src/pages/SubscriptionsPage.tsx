@@ -7,12 +7,14 @@ import { formatDate } from '../utils/format';
 import type {
   CurrentStoreSubscriptionDto,
   StorePlanDto,
+  StoreSubscriptionPaymentAttemptDto,
   StoreSubscriptionStatus,
 } from '../types/domain';
 import { translateEnum } from '../utils/i18n';
 
 function statusBadgeClass(status: StoreSubscriptionStatus): string {
   if (status === 'ACTIVE') return 'badge badge--success';
+  if (status === 'PENDING') return 'badge badge--warning';
   if (status === 'CANCELED') return 'badge badge--danger';
   return 'badge badge--muted';
 }
@@ -30,6 +32,7 @@ export function SubscriptionsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState<StoreSubscriptionPaymentAttemptDto | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<1 | 3 | 12>(1);
   const [autoRenew, setAutoRenew] = useState(false);
 
@@ -43,6 +46,7 @@ export function SubscriptionsPage() {
       ]);
       setPlans(plansResult);
       setCurrent(currentResult);
+      setPendingCheckout(null);
     } catch (err) {
       setError(asHttpError(err).message);
     } finally {
@@ -59,8 +63,32 @@ export function SubscriptionsPage() {
     setMessage(null);
     setError(null);
     try {
-      await subscriptionsService.subscribe(planCode, selectedCycle, autoRenew);
+      const checkout = await subscriptionsService.subscribe(planCode, selectedCycle, autoRenew);
+      setPendingCheckout(checkout.paymentAttempt);
+      setCurrent((prev) => prev
+        ? { ...prev, subscription: checkout.subscription, active: checkout.subscription.status === 'ACTIVE' }
+        : {
+            eligibleForStorePlans: true,
+            active: checkout.subscription.status === 'ACTIVE',
+            subscription: checkout.subscription,
+          });
       setMessage(t('subscribedMsg', { code: planCode }));
+    } catch (err) {
+      setError(asHttpError(err).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmCheckout = async () => {
+    if (!pendingCheckout) return;
+    setActionLoading(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const subscription = await subscriptionsService.confirmCheckout(pendingCheckout.checkoutToken);
+      setMessage(t('subscribedMsg', { code: subscription.planCode }));
+      setPendingCheckout(null);
       await loadData();
     } catch (err) {
       setError(asHttpError(err).message);
@@ -125,7 +153,9 @@ export function SubscriptionsPage() {
             </div>
             <div className="row">
               <span className="row__label">{t('started')}</span>
-              <span className="row__value">{formatDate(activeSub.startedAt)}</span>
+              <span className="row__value">
+                {activeSub.startedAt ? formatDate(activeSub.startedAt) : t('notAvailable', { defaultValue: 'Pending' })}
+              </span>
             </div>
             <div className="row">
               <span className="row__label">{t('expires')}</span>
@@ -151,6 +181,44 @@ export function SubscriptionsPage() {
               >{t('cancelSubscription')}</button>
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {pendingCheckout ? (
+        <section className="card" style={{ marginBottom: '2rem' }}>
+          <div className="card__header">
+            <h2>{t('checkoutPending', { defaultValue: 'Checkout Pending' })}</h2>
+            <span className="badge badge--warning">{pendingCheckout.status}</span>
+          </div>
+          <div className="list">
+            <div className="row">
+              <span className="row__label">{t('price')}</span>
+              <span className="row__value">${pendingCheckout.amountUsd.toFixed(2)} {pendingCheckout.currency}</span>
+            </div>
+            <div className="row">
+              <span className="row__label">{t('expires')}</span>
+              <span className="row__value">{formatDate(pendingCheckout.expiresAt)}</span>
+            </div>
+            <div className="row">
+              <span className="row__label">{t('checkoutToken', { defaultValue: 'Checkout token' })}</span>
+              <span className="row__value">{pendingCheckout.checkoutToken}</span>
+            </div>
+          </div>
+          <div style={{ padding: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={handleConfirmCheckout}
+              disabled={actionLoading}
+            >
+              {t('completeCheckout', { defaultValue: 'Complete checkout' })}
+            </button>
+            {pendingCheckout.checkoutUrl ? (
+              <a className="button button--ghost" href={pendingCheckout.checkoutUrl} target="_blank" rel="noreferrer">
+                {t('openCheckout', { defaultValue: 'Open checkout' })}
+              </a>
+            ) : null}
+          </div>
         </section>
       ) : null}
 

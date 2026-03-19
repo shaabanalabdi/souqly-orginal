@@ -1,5 +1,6 @@
 import {
     AccountType,
+    DisputeStatus,
     IdentityVerificationStatus,
     ListingStatus,
     ReportStatus,
@@ -8,10 +9,10 @@ import {
     type Prisma,
 } from '@prisma/client';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
+import { clearSystemConfigCache } from '../../shared/config/systemConfig.js';
 import {
     isAdmin,
     legacyRoleFromStaffRole,
-    staffRoleFromLegacyRole,
 } from '../../shared/auth/authorization.js';
 import type { AppLanguage } from '../../shared/utils/language.js';
 import { buildPaginationMeta, getSkip, parsePagination } from '../../shared/utils/pagination.js';
@@ -23,7 +24,13 @@ import {
     type BlacklistEntryType,
     updateBlacklistEntry,
 } from '../../shared/moderation/blacklist.service.js';
-import { mapListingActionToStatus, normalizeReportStatus } from './admin.validation.js';
+import { mapListingActionToStatus, normalizeDisputeStatus, normalizeReportStatus } from './admin.validation.js';
+import { domainEventBus } from '../../events/domainEvents.js';
+import { createAuditLog as persistAuditLog } from '../../shared/audit/auditLog.service.js';
+import {
+    recordListingStatusHistory,
+    recordUserRoleHistory,
+} from '../../shared/audit/domainHistory.service.js';
 
 interface DashboardDto {
     users: {
@@ -68,8 +75,32 @@ interface AdminReportDto {
     } | null;
 }
 
+interface AdminDisputeDto {
+    id: number;
+    dealId: number;
+    openedByUserId: number;
+    reason: string;
+    description: string;
+    status: DisputeStatus;
+    resolvedByAdmin: number | null;
+    resolution: string | null;
+    createdAt: string;
+    resolvedAt: string | null;
+    deal: {
+        id: number;
+        status: string;
+        finalPrice: number;
+        currency: string;
+        buyerId: number;
+        sellerId: number;
+        listingId: number;
+        listingTitle: string;
+    };
+}
+
 interface ModeratedListingDto {
     id: number;
+    userId: number;
     status: ListingStatus;
     updatedAt: string;
 }
@@ -168,6 +199,14 @@ interface FeaturedListingDto {
     updatedAt: string;
 }
 
+interface AdminSystemConfigDto {
+    version: number;
+    config: Prisma.JsonValue;
+    changedById: number | null;
+    changeNote: string | null;
+    createdAt: string | null;
+}
+
 function mapIdentityVerificationDto(request: {
     id: number;
     userId: number;
@@ -246,17 +285,16 @@ async function createAuditLog(
     entityId: number,
     oldData?: Prisma.InputJsonValue,
     newData?: Prisma.InputJsonValue,
+    db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<void> {
-    await prisma.auditLog.create({
-        data: {
-            adminId,
-            action,
-            entityType,
-            entityId,
-            oldData,
-            newData,
-        },
-    });
+    await persistAuditLog({
+        adminId,
+        action,
+        entityType,
+        entityId,
+        oldData,
+        newData,
+    }, db);
 }
 
 export async function getAdminDashboardStats(): Promise<DashboardDto> {
@@ -442,7 +480,7 @@ export async function resolveReport(
 
         await prisma.listing.updateMany({
             where: { id: listingId },
-            data: { status: ListingStatus.DELETED },
+            data: { status: ListingStatus.ARCHIVED },
         });
     }
 
@@ -536,6 +574,93 @@ export async function resolveReport(
     };
 }
 
+export async function listDisputes(
+    query: Record<string, unknown>,
+    lang: AppLanguage,
+): Promise<{ items: AdminDisputeDto[]; meta: ReturnType<typeof buildPaginationMeta> }> {
+    const pagination = parsePagination(query);
+    const rawStatus = typeof query.status === 'string' ? query.status : undefined;
+    const status = normalizeDisputeStatus(rawStatus);
+    const dealId = typeof query.dealId === 'number' ? query.dealId : undefined;
+    const openedByUserId = typeof query.openedByUserId === 'number' ? query.openedByUserId : undefined;
+
+    const where: Prisma.DisputeCaseWhereInput = {};
+    if (status) {
+        where.status = status;
+    }
+    if (dealId) {
+        where.dealId = dealId;
+    }
+    if (openedByUserId) {
+        where.openedByUserId = openedByUserId;
+    }
+
+    const [total, disputes] = await Promise.all([
+        prisma.disputeCase.count({ where }),
+        prisma.disputeCase.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip: getSkip(pagination),
+            take: pagination.limit,
+            select: {
+                id: true,
+                dealId: true,
+                openedByUserId: true,
+                reason: true,
+                description: true,
+                status: true,
+                resolvedByAdmin: true,
+                resolution: true,
+                createdAt: true,
+                resolvedAt: true,
+                deal: {
+                    select: {
+                        id: true,
+                        status: true,
+                        finalPrice: true,
+                        currency: true,
+                        buyerId: true,
+                        sellerId: true,
+                        listingId: true,
+                        listing: {
+                            select: {
+                                titleAr: true,
+                                titleEn: true,
+                            },
+                        },
+                    },
+                },
+            },
+        }),
+    ]);
+
+    return {
+        items: disputes.map((dispute) => ({
+            id: dispute.id,
+            dealId: dispute.dealId,
+            openedByUserId: dispute.openedByUserId,
+            reason: dispute.reason,
+            description: dispute.description,
+            status: dispute.status,
+            resolvedByAdmin: dispute.resolvedByAdmin,
+            resolution: dispute.resolution,
+            createdAt: dispute.createdAt.toISOString(),
+            resolvedAt: dispute.resolvedAt?.toISOString() ?? null,
+            deal: {
+                id: dispute.deal.id,
+                status: dispute.deal.status,
+                finalPrice: dispute.deal.finalPrice,
+                currency: dispute.deal.currency,
+                buyerId: dispute.deal.buyerId,
+                sellerId: dispute.deal.sellerId,
+                listingId: dispute.deal.listingId,
+                listingTitle: localizeListingTitle(dispute.deal.listing, lang),
+            },
+        })),
+        meta: buildPaginationMeta(total, pagination),
+    };
+}
+
 export async function moderateListing(
     adminId: number,
     listingId: number,
@@ -545,6 +670,7 @@ export async function moderateListing(
         where: { id: listingId },
         select: {
             id: true,
+            userId: true,
             status: true,
             updatedAt: true,
         },
@@ -555,29 +681,50 @@ export async function moderateListing(
     }
 
     const newStatus = mapListingActionToStatus(payload.action);
-    const updated = await prisma.listing.update({
-        where: { id: listing.id },
-        data: {
-            status: newStatus,
-        },
-        select: {
-            id: true,
-            status: true,
-            updatedAt: true,
-        },
+    const updated = await prisma.$transaction(async (tx) => {
+        const nextListing = await tx.listing.update({
+            where: { id: listing.id },
+            data: {
+                status: newStatus,
+            },
+            select: {
+                id: true,
+                status: true,
+                updatedAt: true,
+            },
+        });
+
+        await recordListingStatusHistory({
+            listingId: listing.id,
+            oldStatus: listing.status,
+            newStatus: nextListing.status,
+            actorId: adminId,
+            reason: payload.reason ?? `Moderation action: ${payload.action}`,
+        }, tx);
+
+        await createAuditLog(
+            adminId,
+            `LISTING_${payload.action.toUpperCase()}`,
+            'listing',
+            listing.id,
+            { status: listing.status, reason: payload.reason } as Prisma.InputJsonObject,
+            { status: nextListing.status } as Prisma.InputJsonObject,
+            tx,
+        );
+
+        return nextListing;
     });
 
-    await createAuditLog(
-        adminId,
-        `LISTING_${payload.action.toUpperCase()}`,
-        'listing',
-        listing.id,
-        { status: listing.status, reason: payload.reason } as Prisma.InputJsonObject,
-        { status: updated.status } as Prisma.InputJsonObject,
-    );
+    domainEventBus.publish('LISTING_MODERATED', {
+        listingId: updated.id,
+        ownerUserId: listing.userId,
+        status: updated.status,
+        action: payload.action,
+    });
 
     return {
         id: updated.id,
+        userId: listing.userId,
         status: updated.status,
         updatedAt: updated.updatedAt.toISOString(),
     };
@@ -587,7 +734,6 @@ export async function listUsers(
     query: Record<string, unknown>,
 ): Promise<{ items: AdminUserDto[]; meta: ReturnType<typeof buildPaginationMeta> }> {
     const pagination = parsePagination(query);
-    const role = query.role && typeof query.role === 'string' ? (query.role as Role) : undefined;
     const accountType =
         query.accountType && typeof query.accountType === 'string' ? (query.accountType as AccountType) : undefined;
     const staffRole =
@@ -599,14 +745,6 @@ export async function listUsers(
     if (active !== undefined) filters.push({ isActive: active });
     if (accountType) filters.push({ accountType });
     if (staffRole) filters.push({ staffRole });
-    if (role) {
-        filters.push({
-            OR: [
-                { role },
-                { staffRole: staffRoleFromLegacyRole(role) },
-            ],
-        });
-    }
     if (search) {
         filters.push({
             OR: [
@@ -671,8 +809,7 @@ export async function moderateUser(
     adminId: number,
     targetUserId: number,
     payload: {
-        action: 'activate' | 'deactivate' | 'ban' | 'unban' | 'set_role' | 'set_staff_role' | 'set_account_type';
-        role?: Role;
+        action: 'activate' | 'deactivate' | 'ban' | 'unban' | 'set_staff_role' | 'set_account_type';
         staffRole?: StaffRole;
         accountType?: AccountType;
         reason?: string;
@@ -699,8 +836,7 @@ export async function moderateUser(
 
     const isTargetAdmin = isAdmin(existing);
     if (
-        payload.action !== 'set_role'
-        && payload.action !== 'set_staff_role'
+        payload.action !== 'set_staff_role'
         && isTargetAdmin
         && adminId !== targetUserId
     ) {
@@ -731,12 +867,6 @@ export async function moderateUser(
         updateData.bannedReason = null;
     }
 
-    if (payload.action === 'set_role') {
-        const nextStaffRole = staffRoleFromLegacyRole(payload.role ?? Role.USER);
-        updateData.role = legacyRoleFromStaffRole(nextStaffRole);
-        updateData.staffRole = nextStaffRole;
-    }
-
     if (payload.action === 'set_staff_role') {
         const nextStaffRole = payload.staffRole ?? StaffRole.NONE;
         updateData.staffRole = nextStaffRole;
@@ -747,42 +877,57 @@ export async function moderateUser(
         updateData.accountType = payload.accountType;
     }
 
-    const updated = await prisma.user.update({
-        where: { id: existing.id },
-        data: updateData,
-        select: {
-            id: true,
-            email: true,
-            role: true,
-            accountType: true,
-            staffRole: true,
-            isActive: true,
-            bannedAt: true,
-            bannedReason: true,
-            updatedAt: true,
-        },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+        const nextUser = await tx.user.update({
+            where: { id: existing.id },
+            data: updateData,
+            select: {
+                id: true,
+                email: true,
+                role: true,
+                accountType: true,
+                staffRole: true,
+                isActive: true,
+                bannedAt: true,
+                bannedReason: true,
+                updatedAt: true,
+            },
+        });
 
-    await createAuditLog(
-        adminId,
-        `USER_${payload.action.toUpperCase()}`,
-        'user',
-        existing.id,
-        {
-            role: existing.role,
-            accountType: existing.accountType,
-            staffRole: existing.staffRole,
-            isActive: existing.isActive,
-            bannedAt: existing.bannedAt?.toISOString() ?? null,
-        } as Prisma.InputJsonObject,
-        {
-            role: updated.role,
-            accountType: updated.accountType,
-            staffRole: updated.staffRole,
-            isActive: updated.isActive,
-            bannedAt: updated.bannedAt?.toISOString() ?? null,
-        } as Prisma.InputJsonObject,
-    );
+        await recordUserRoleHistory({
+            userId: existing.id,
+            changedById: adminId,
+            oldStaffRole: existing.staffRole,
+            newStaffRole: nextUser.staffRole,
+            oldAccountType: existing.accountType,
+            newAccountType: nextUser.accountType,
+            reason: payload.reason ?? payload.action,
+        }, tx);
+
+        await createAuditLog(
+            adminId,
+            `USER_${payload.action.toUpperCase()}`,
+            'user',
+            existing.id,
+            {
+                role: existing.role,
+                accountType: existing.accountType,
+                staffRole: existing.staffRole,
+                isActive: existing.isActive,
+                bannedAt: existing.bannedAt?.toISOString() ?? null,
+            } as Prisma.InputJsonObject,
+            {
+                role: nextUser.role,
+                accountType: nextUser.accountType,
+                staffRole: nextUser.staffRole,
+                isActive: nextUser.isActive,
+                bannedAt: nextUser.bannedAt?.toISOString() ?? null,
+            } as Prisma.InputJsonObject,
+            tx,
+        );
+
+        return nextUser;
+    });
 
     return {
         id: updated.id,
@@ -1066,6 +1211,11 @@ export async function resolveIdentityVerification(
         } as Prisma.InputJsonObject,
     );
 
+    domainEventBus.publish('IDENTITY_VERIFICATION_REVIEWED', {
+        userId: existing.userId,
+        status: nextStatus,
+    });
+
     return mapIdentityVerificationDto(updated);
 }
 
@@ -1256,6 +1406,107 @@ export async function featureListingByAdmin(
         isFeatured: Boolean(updated.featuredUntil && updated.featuredUntil.getTime() > Date.now()),
         updatedAt: updated.updatedAt.toISOString(),
     };
+}
+
+export async function getAdminSystemConfig(): Promise<AdminSystemConfigDto> {
+    const latest = await prisma.systemConfigVersion.findFirst({
+        orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
+        select: {
+            version: true,
+            configJson: true,
+            changedById: true,
+            changeNote: true,
+            createdAt: true,
+        },
+    });
+
+    if (!latest) {
+        return {
+            version: 0,
+            config: {},
+            changedById: null,
+            changeNote: null,
+            createdAt: null,
+        };
+    }
+
+    return {
+        version: latest.version,
+        config: latest.configJson,
+        changedById: latest.changedById,
+        changeNote: latest.changeNote ?? null,
+        createdAt: latest.createdAt.toISOString(),
+    };
+}
+
+export async function updateAdminSystemConfig(
+    adminId: number,
+    payload: { config: Record<string, unknown>; replace?: boolean; changeNote?: string },
+): Promise<AdminSystemConfigDto> {
+    return prisma.$transaction(async (tx) => {
+        const current = await tx.systemConfigVersion.findFirst({
+            orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
+            select: {
+                version: true,
+                configJson: true,
+            },
+        });
+
+        const previousConfig =
+            current?.configJson && typeof current.configJson === 'object' && !Array.isArray(current.configJson)
+                ? (current.configJson as Record<string, unknown>)
+                : {};
+        const nextConfig: Record<string, unknown> = payload.replace
+            ? payload.config
+            : ({
+                  ...previousConfig,
+                  ...payload.config,
+              });
+
+        const created = await tx.systemConfigVersion.create({
+            data: {
+                version: (current?.version ?? 0) + 1,
+                configJson: nextConfig as Prisma.InputJsonValue,
+                changedById: adminId,
+                changeNote: payload.changeNote ?? null,
+            },
+            select: {
+                id: true,
+                version: true,
+                configJson: true,
+                changedById: true,
+                changeNote: true,
+                createdAt: true,
+            },
+        });
+
+        await createAuditLog(
+            adminId,
+            'SYSTEM_CONFIG_UPDATE',
+            'system_config',
+            created.id,
+            {
+                version: current?.version ?? 0,
+                config: previousConfig,
+            } as Prisma.InputJsonObject,
+            {
+                version: created.version,
+                config: nextConfig,
+                replace: Boolean(payload.replace),
+            } as Prisma.InputJsonObject,
+            tx,
+        );
+
+        clearSystemConfigCache();
+
+        return {
+            version: created.version,
+            config: created.configJson,
+            changedById: created.changedById,
+            changeNote: created.changeNote ?? null,
+            createdAt: created.createdAt.toISOString(),
+        };
+    });
 }
 
 export async function listAuditLogs(

@@ -1,12 +1,21 @@
 import multer from 'multer';
 import type { NextFunction, Request, Response } from 'express';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
-import { uploadListingImages } from './media.service.js';
+import { uploadListingImages, type MediaUploadKind } from './media.service.js';
+
+function parseUploadKind(value: unknown): MediaUploadKind {
+    if (value === 'verification') {
+        return 'verification';
+    }
+
+    return 'listing';
+}
 
 export async function uploadImagesController(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-        const items = await uploadListingImages(files);
+        const kind = parseUploadKind(req.body?.kind);
+        const items = await uploadListingImages(files, kind);
 
         res.status(201).json({
             success: true,

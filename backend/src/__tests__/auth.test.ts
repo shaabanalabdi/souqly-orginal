@@ -158,10 +158,12 @@ describe('Auth routes', () => {
         expect(typeof response.body.data.accessToken).toBe('string');
         expect(response.body.data.accessToken.length).toBeGreaterThan(20);
 
-        const cookies = response.headers['set-cookie'] ?? [];
+        const rawCookies = response.headers['set-cookie'];
+        const cookies = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
         expect(cookies.length).toBeGreaterThan(0);
-        expect(cookies[0]).toContain('souqly_refresh_token=');
-        expect(cookies[0]).toContain('HttpOnly');
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_refresh_token='))).toBe(true);
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_refresh_token=') && cookie.includes('HttpOnly'))).toBe(true);
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_csrf_token='))).toBe(true);
     });
 
     it('POST /api/v1/auth/login returns unauthorized for wrong credentials', async () => {
@@ -229,9 +231,11 @@ describe('Auth routes', () => {
         expect(response.body.data.tokenType).toBe('Bearer');
         expect(response.body.data.user.email).toBe('google@souqly.com');
 
-        const cookies = response.headers['set-cookie'] ?? [];
+        const rawCookies = response.headers['set-cookie'];
+        const cookies = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
         expect(cookies.length).toBeGreaterThan(0);
-        expect(cookies[0]).toContain('souqly_refresh_token=');
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_refresh_token='))).toBe(true);
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_csrf_token='))).toBe(true);
     });
 
     it('POST /api/v1/auth/oauth/google links provider for existing email account', async () => {
@@ -290,6 +294,7 @@ describe('Auth routes', () => {
 
     it('POST /api/v1/auth/refresh returns a new access token when cookie is valid', async () => {
         const refreshToken = signRefreshToken({ userId: 11, version: 1 });
+        const csrfToken = 'csrf-valid-token';
         jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
             id: 11,
             role: 'USER',
@@ -303,7 +308,8 @@ describe('Auth routes', () => {
 
         const response = await request(app)
             .post('/api/v1/auth/refresh')
-            .set('Cookie', [`souqly_refresh_token=${refreshToken}`]);
+            .set('Cookie', [`souqly_refresh_token=${refreshToken}`, `souqly_csrf_token=${csrfToken}`])
+            .set('x-csrf-token', csrfToken);
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
@@ -313,17 +319,35 @@ describe('Auth routes', () => {
     });
 
     it('POST /api/v1/auth/refresh returns error when cookie is missing', async () => {
-        const response = await request(app).post('/api/v1/auth/refresh');
+        const csrfToken = 'csrf-token';
+        const response = await request(app)
+            .post('/api/v1/auth/refresh')
+            .set('Cookie', [`souqly_csrf_token=${csrfToken}`])
+            .set('x-csrf-token', csrfToken);
 
         expect(response.status).toBe(401);
         expect(response.body.success).toBe(false);
         expect(response.body.error.code).toBe('REFRESH_TOKEN_REQUIRED');
     });
 
-    it('POST /api/v1/auth/refresh returns error for invalid token', async () => {
+    it('POST /api/v1/auth/refresh returns error when csrf token is missing', async () => {
+        const refreshToken = signRefreshToken({ userId: 11, version: 1 });
+
         const response = await request(app)
             .post('/api/v1/auth/refresh')
-            .set('Cookie', ['souqly_refresh_token=invalid-token']);
+            .set('Cookie', [`souqly_refresh_token=${refreshToken}`]);
+
+        expect(response.status).toBe(403);
+        expect(response.body.success).toBe(false);
+        expect(response.body.error.code).toBe('CSRF_TOKEN_INVALID');
+    });
+
+    it('POST /api/v1/auth/refresh returns error for invalid token', async () => {
+        const csrfToken = 'csrf-token';
+        const response = await request(app)
+            .post('/api/v1/auth/refresh')
+            .set('Cookie', ['souqly_refresh_token=invalid-token', `souqly_csrf_token=${csrfToken}`])
+            .set('x-csrf-token', csrfToken);
 
         expect(response.status).toBe(401);
         expect(response.body.success).toBe(false);
@@ -331,16 +355,22 @@ describe('Auth routes', () => {
     });
 
     it('POST /api/v1/auth/logout clears refresh token cookie', async () => {
-        const response = await request(app).post('/api/v1/auth/logout');
+        const csrfToken = 'csrf-token';
+        const response = await request(app)
+            .post('/api/v1/auth/logout')
+            .set('Cookie', [`souqly_csrf_token=${csrfToken}`])
+            .set('x-csrf-token', csrfToken);
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
         expect(response.body.data.loggedOut).toBe(true);
 
-        const cookies = response.headers['set-cookie'] ?? [];
+        const rawCookies = response.headers['set-cookie'];
+        const cookies = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
         expect(cookies.length).toBeGreaterThan(0);
-        expect(cookies[0]).toContain('souqly_refresh_token=');
-        expect(cookies[0]).toContain('HttpOnly');
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_refresh_token='))).toBe(true);
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_csrf_token='))).toBe(true);
+        expect(cookies.some((cookie: string) => cookie.includes('souqly_refresh_token=') && cookie.includes('HttpOnly'))).toBe(true);
     });
 
     it('POST /api/v1/auth/forgot-password sends reset token for valid account', async () => {

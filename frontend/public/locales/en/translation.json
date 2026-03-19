@@ -537,12 +537,13 @@
       "USED": "Used"
     },
     "listingStatus": {
+      "DRAFT": "Draft",
       "PENDING": "Pending",
       "ACTIVE": "Active",
       "REJECTED": "Rejected",
       "SOLD": "Sold",
       "EXPIRED": "Expired",
-      "DELETED": "Deleted"
+      "ARCHIVED": "Archived"
     },
     "messageType": {
       "TEXT": "Text",
@@ -561,6 +562,7 @@
       "PENDING": "Pending",
       "CONFIRMED": "Confirmed",
       "COMPLETED": "Completed",
+      "RATED": "Rated",
       "CANCELLED": "Cancelled",
       "DISPUTED": "Disputed"
     },

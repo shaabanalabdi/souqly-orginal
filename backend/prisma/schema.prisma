@@ -1,7 +1,7 @@
 // FILE: backend/prisma/schema.prisma
 
 generator client {
-  provider        = "prisma-client-js"
+  provider = "prisma-client-js"
   previewFeatures = ["fullTextIndex"]
 }
 
@@ -47,17 +47,30 @@ enum IdentityVerificationStatus {
 }
 
 enum ListingStatus {
+  DRAFT
   PENDING
   ACTIVE
   REJECTED
-  SOLD
   EXPIRED
-  DELETED
+  SOLD
+  ARCHIVED
 }
 
 enum Condition {
   NEW
   USED
+}
+
+enum ContactVisibility {
+  HIDDEN
+  VISIBLE
+  APPROVAL
+}
+
+enum ContactRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum MessageType {
@@ -79,6 +92,7 @@ enum DealStatus {
   PENDING
   CONFIRMED
   COMPLETED
+  RATED
   CANCELLED
   DISPUTED
 }
@@ -88,6 +102,12 @@ enum EscrowStatus {
   HELD
   RELEASED
   REFUNDED
+}
+
+enum EscrowLedgerEntryType {
+  HOLD
+  RELEASE
+  REFUND
 }
 
 enum EscrowWebhookEventStatus {
@@ -142,8 +162,16 @@ enum RFQStatus {
 }
 
 enum StoreSubscriptionStatus {
+  PENDING
   ACTIVE
   EXPIRED
+  CANCELED
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
   CANCELED
 }
 
@@ -183,6 +211,8 @@ model User {
   buyerThreads    ChatThread[]  @relation("BuyerThreads")
   sellerThreads   ChatThread[]  @relation("SellerThreads")
   sentMessages    ChatMessage[]
+  requestedContactAccess ContactAccessRequest[] @relation("ContactAccessRequester")
+  receivedContactAccess  ContactAccessRequest[] @relation("ContactAccessSeller")
   buyerDeals      Deal[]        @relation("BuyerDeals")
   sellerDeals     Deal[]        @relation("SellerDeals")
   reviewsGiven    Review[]      @relation("ReviewsGiven")
@@ -192,6 +222,14 @@ model User {
   savedSearches   SavedSearch[]
   identityVerificationRequests IdentityVerificationRequest[] @relation("IdentityVerificationOwner")
   identityVerificationReviews IdentityVerificationRequest[] @relation("IdentityVerificationReviewer")
+  notifications        Notification[]
+  notificationPreference NotificationPreference?
+  listingMonthlyQuotas ListingMonthlyQuota[]
+  trustScoreEvents     TrustScoreEvent[]
+  storeAnalytics       StoreAnalyticsDaily[]
+  craftsmanLeads       CraftsmanLead[] @relation("CraftsmanLeads")
+  escrowLedgerEntries  EscrowLedgerEntry[]
+  subscriptionPaymentAttempts StoreSubscriptionPaymentAttempt[]
 
   @@index([email])
   @@index([phone])
@@ -289,6 +327,7 @@ model Subcategory {
   nameAr     String                @db.VarChar(100)
   nameEn     String                @db.VarChar(100)
   slug       String                @unique @db.VarChar(100)
+  isService  Boolean               @default(false)
   sortOrder  Int                   @default(0)
   isActive   Boolean               @default(true)
   createdAt  DateTime              @default(now())
@@ -346,8 +385,10 @@ model Listing {
   moqUnit            String?       @db.VarChar(50)
   locationLat        Float?
   locationLng        Float?
-  phoneVisibility    Boolean       @default(false)
-  whatsappVisibility Boolean       @default(false)
+  phoneNumber        String?       @db.VarChar(30)
+  whatsappNumber     String?       @db.VarChar(30)
+  phoneVisibility    ContactVisibility @default(HIDDEN)
+  whatsappVisibility ContactVisibility @default(HIDDEN)
   status             ListingStatus @default(PENDING)
   featuredUntil      DateTime?
   viewCount          Int           @default(0)
@@ -363,6 +404,7 @@ model Listing {
   images          ListingImage[]
   attributeValues ListingAttributeValue[]
   chatThreads     ChatThread[]
+  contactAccessRequests ContactAccessRequest[]
   offers          Offer[]
   deals           Deal[]
   favorites       Favorite[]
@@ -373,9 +415,11 @@ model Listing {
   @@index([countryId])
   @@index([cityId])
   @@index([status])
+  @@index([status, expiresAt])
   @@index([createdAt])
   @@index([priceAmount])
-  @@fulltext([titleAr, descriptionAr])
+  @@index([titleAr])
+  @@fulltext([titleAr, descriptionAr, titleEn, descriptionEn], map: "listings_fulltext_idx")
   @@map("listings")
 }
 
@@ -427,6 +471,7 @@ model ChatThread {
   buyer    User          @relation("BuyerThreads", fields: [buyerId], references: [id])
   seller   User          @relation("SellerThreads", fields: [sellerId], references: [id])
   messages ChatMessage[]
+  contactAccessRequest ContactAccessRequest?
   offers   Offer[]
 
   @@unique([listingId, buyerId])
@@ -454,6 +499,30 @@ model ChatMessage {
   @@index([senderId])
   @@index([createdAt])
   @@map("chat_messages")
+}
+
+model ContactAccessRequest {
+  id               Int                  @id @default(autoincrement())
+  threadId         Int                  @unique
+  listingId        Int
+  requesterUserId  Int
+  sellerUserId     Int
+  status           ContactRequestStatus @default(PENDING)
+  requestedMessage String?              @db.Text
+  phoneApproved    Boolean              @default(false)
+  whatsappApproved Boolean              @default(false)
+  respondedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  thread     ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  listing    Listing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  requester  User       @relation("ContactAccessRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  seller     User       @relation("ContactAccessSeller", fields: [sellerUserId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, requesterUserId, sellerUserId])
+  @@index([sellerUserId, status, createdAt])
+  @@map("contact_access_requests")
 }
 
 // ═══════════════════════════════════════
@@ -515,6 +584,7 @@ model Deal {
   reviews  Review[]
   dispute  DisputeCase?
   shipment Shipment?
+  escrowEntries EscrowLedgerEntry[]
 
   @@index([buyerId])
   @@index([sellerId])
@@ -541,6 +611,26 @@ model EscrowWebhookEvent {
   @@index([dealId])
   @@index([providerRef])
   @@map("escrow_webhook_events")
+}
+
+model EscrowLedgerEntry {
+  id             Int                   @id @default(autoincrement())
+  dealId         Int
+  actorUserId    Int?
+  entryType      EscrowLedgerEntryType
+  amount         Float
+  currency       String                @db.VarChar(5)
+  providerRef    String?               @db.VarChar(120)
+  idempotencyKey String                @unique @db.VarChar(120)
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+
+  deal      Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([dealId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("escrow_ledger_entries")
 }
 
 // ═══════════════════════════════════════
@@ -860,16 +950,292 @@ model StoreSubscription {
   userId    Int                     @unique
   planCode  String                  @db.VarChar(50)
   planName  String                  @db.VarChar(100)
-  status    StoreSubscriptionStatus @default(ACTIVE)
-  startedAt DateTime                @default(now())
+  status    StoreSubscriptionStatus @default(PENDING)
+  startedAt DateTime?
   expiresAt DateTime
   autoRenew Boolean                 @default(false)
   priceUsd  Float
+  lastCheckoutToken String?         @unique @db.VarChar(120)
+  activatedAt DateTime?
   createdAt DateTime                @default(now())
   updatedAt DateTime                @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentAttempts StoreSubscriptionPaymentAttempt[]
 
   @@index([status])
   @@map("store_subscriptions")
 }
+
+model StoreSubscriptionPaymentAttempt {
+  id               Int                  @id @default(autoincrement())
+  userId           Int
+  subscriptionId   Int?
+  planCode         String               @db.VarChar(50)
+  billingMonths    Int
+  amountUsd        Float
+  currency         String               @default("USD") @db.VarChar(5)
+  status           PaymentAttemptStatus @default(PENDING)
+  idempotencyKey   String               @unique @db.VarChar(120)
+  checkoutToken    String               @unique @db.VarChar(120)
+  providerRef      String?              @unique @db.VarChar(120)
+  failureReason    String?              @db.Text
+  paidAt           DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription StoreSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([subscriptionId])
+  @@map("store_subscription_payment_attempts")
+}
+
+// ═══════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════
+
+enum NotificationType {
+  MESSAGE_RECEIVED
+  OFFER_RECEIVED
+  OFFER_RESPONDED
+  PHONE_REQUESTED
+  DEAL_CREATED
+  DEAL_CONFIRMED
+  DEAL_COMPLETED
+  DEAL_CANCELLED
+  DEAL_DISPUTED
+  ESCROW_HELD
+  ESCROW_RELEASED
+  ESCROW_REFUNDED
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  REVIEW_RECEIVED
+  LISTING_APPROVED
+  LISTING_REJECTED
+  LISTING_FEATURED
+  LISTING_SOLD
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_EXPIRED
+  REPORT_RESOLVED
+  SYSTEM
+}
+
+model Notification {
+  id         Int              @id @default(autoincrement())
+  userId     Int
+  type       NotificationType
+  title      String           @db.VarChar(200)
+  body       String           @db.Text
+  targetType String?          @db.VarChar(50)
+  targetId   Int?
+  link       String?          @db.VarChar(500)
+  isRead     Boolean          @default(false)
+  readAt     DateTime?
+  dedupKey   String?          @unique @db.VarChar(120)
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  emailEnabled   Boolean @default(true)
+  pushEnabled    Boolean @default(true)
+  chatMessages   Boolean @default(true)
+  offerUpdates   Boolean @default(true)
+  dealUpdates    Boolean @default(true)
+  systemAlerts   Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+// ═══════════════════════════════════════
+// LISTING AUDIT TRAILS
+// ═══════════════════════════════════════
+
+model ListingStatusHistory {
+  id         Int           @id @default(autoincrement())
+  listingId  Int
+  oldStatus  ListingStatus
+  newStatus  ListingStatus
+  actorId    Int
+  reason     String?       @db.Text
+  createdAt  DateTime      @default(now())
+
+  @@index([listingId])
+  @@index([actorId])
+  @@map("listing_status_history")
+}
+
+model ListingMonthlyQuota {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  yearMonth      String   @db.VarChar(7)  // format: "2026-03"
+  publishedCount Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, yearMonth])
+  @@index([userId])
+  @@map("listing_monthly_quota")
+}
+
+// ═══════════════════════════════════════
+// TRUST AUDIT
+// ═══════════════════════════════════════
+
+enum TrustScoreEventType {
+  DEAL_COMPLETED
+  REVIEW_RECEIVED
+  EMAIL_VERIFIED
+  PHONE_VERIFIED
+  ID_VERIFIED
+  DISPUTE_OPENED
+  FRAUD_FLAGGED
+  ACCOUNT_AGE_MILESTONE
+  RECALCULATION
+}
+
+model TrustScoreEvent {
+  id        Int                 @id @default(autoincrement())
+  userId    Int
+  eventType TrustScoreEventType
+  delta     Int                 // positive or negative change
+  scoreBefore Int
+  scoreAfter  Int
+  metadata  Json?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("trust_score_events")
+}
+
+// ═══════════════════════════════════════
+// USER ROLE HISTORY
+// ═══════════════════════════════════════
+
+model UserRoleHistory {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  changedById    Int
+  oldStaffRole   StaffRole
+  newStaffRole   StaffRole
+  oldAccountType AccountType
+  newAccountType AccountType
+  reason         String?      @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([userId])
+  @@index([changedById])
+  @@map("user_role_history")
+}
+
+// ═══════════════════════════════════════
+// STORE ANALYTICS
+// ═══════════════════════════════════════
+
+model StoreAnalyticsDaily {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  date          DateTime @db.Date
+  listingViews  Int      @default(0)
+  profileViews  Int      @default(0)
+  chatStarts    Int      @default(0)
+  offersReceived Int     @default(0)
+  dealsCreated  Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("store_analytics_daily")
+}
+
+// ═══════════════════════════════════════
+// FRAUD SIGNALS
+// ═══════════════════════════════════════
+
+enum FraudSignalSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model FraudSignal {
+  id          Int                 @id @default(autoincrement())
+  listingId   Int?
+  userId      Int?
+  signalCode  String              @db.VarChar(100)
+  severity    FraudSignalSeverity
+  score       Int                 @default(0)
+  payload     Json?
+  resolvedAt  DateTime?
+  createdAt   DateTime            @default(now())
+
+  @@index([listingId])
+  @@index([userId])
+  @@index([severity, createdAt])
+  @@map("fraud_signals")
+}
+
+// ═══════════════════════════════════════
+// CRAFTSMAN LEADS
+// ═══════════════════════════════════════
+
+enum CraftsmanLeadStatus {
+  NEW
+  CONTACTED
+  CLOSED
+  SPAM
+}
+
+model CraftsmanLead {
+  id               Int                @id @default(autoincrement())
+  craftsmanUserId  Int
+  fromUserId       Int?
+  source           String             @db.VarChar(50)  // "chat" | "phone" | "whatsapp" | "direct"
+  message          String?            @db.Text
+  status           CraftsmanLeadStatus @default(NEW)
+  createdAt        DateTime           @default(now())
+
+  craftsman User  @relation("CraftsmanLeads", fields: [craftsmanUserId], references: [id], onDelete: Cascade)
+
+  @@index([craftsmanUserId])
+  @@index([status])
+  @@map("craftsman_leads")
+}
+
+// ═══════════════════════════════════════
+// SYSTEM CONFIG
+// ═══════════════════════════════════════
+
+model SystemConfigVersion {
+  id            Int      @id @default(autoincrement())
+  version       Int      @default(0)
+  configJson    Json
+  changedById   Int
+  changeNote    String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@index([version])
+  @@map("system_config_versions")
+}
+

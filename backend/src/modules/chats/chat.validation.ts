@@ -1,4 +1,4 @@
-import { MessageType } from '@prisma/client';
+import { MessageType, OfferStatus } from '@prisma/client';
 import { z } from 'zod';
 
 export const paginationQuerySchema = z.object({
@@ -43,6 +43,10 @@ export const phoneRequestBodySchema = z.object({
     message: z.string().trim().max(500).optional(),
 });
 
+export const phoneRequestResponseBodySchema = z.object({
+    action: z.enum(['approve', 'reject']),
+});
+
 export const createOfferBodySchema = z.object({
     amount: z.coerce.number().positive(),
     quantity: z.coerce.number().int().positive().optional().default(1),
@@ -51,6 +55,13 @@ export const createOfferBodySchema = z.object({
 
 export const offerIdParamsSchema = z.object({
     offerId: z.coerce.number().int().positive(),
+});
+
+export const listOffersQuerySchema = z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+    status: z.nativeEnum(OfferStatus).optional(),
+    lang: z.string().optional(),
 });
 
 export const respondOfferBodySchema = z
@@ -67,3 +78,5 @@ export const respondOfferBodySchema = z
             });
         }
     });
+
+export type PhoneRequestResponseBody = z.infer<typeof phoneRequestResponseBodySchema>;

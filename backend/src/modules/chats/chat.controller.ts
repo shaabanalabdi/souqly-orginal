@@ -6,10 +6,13 @@ import { emitMessageCreated, emitOfferUpdated, emitThreadCreated } from './chat.
 import {
     createOrGetThread,
     createThreadOffer,
+    getPhoneRequestStateInThread,
     getMyUnreadMessagesCount,
     getThreadParticipantIds,
+    listMyOffers,
     listMyThreads,
     listThreadMessages,
+    respondToPhoneRequestInThread,
     requestPhoneInThread,
     respondToOffer,
     sendThreadMessage,
@@ -52,6 +55,22 @@ export async function listMyThreadsController(req: Request, res: Response, next:
         const userId = requireUserId(req);
         const lang = getRequestLanguage(req);
         const result = await listMyThreads(userId, req.query, lang);
+
+        res.json({
+            success: true,
+            data: result.items,
+            meta: result.meta,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function listMyOffersController(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const userId = requireUserId(req);
+        const lang = getRequestLanguage(req);
+        const result = await listMyOffers(userId, req.query, lang);
 
         res.json({
             success: true,
@@ -130,6 +149,48 @@ export async function requestPhoneController(req: Request, res: Response, next: 
         res.status(201).json({
             success: true,
             data: message,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getPhoneRequestStateController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> {
+    try {
+        const userId = requireUserId(req);
+        const state = await getPhoneRequestStateInThread(userId, Number(req.params.threadId));
+
+        res.json({
+            success: true,
+            data: state,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function respondPhoneRequestController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> {
+    try {
+        const userId = requireUserId(req);
+        const result = await respondToPhoneRequestInThread(userId, Number(req.params.threadId), req.body);
+
+        const io = getSocketServer(req);
+        if (io) {
+            const participants = await getThreadParticipantIds(result.message.threadId);
+            emitMessageCreated(io, [participants.buyerId, participants.sellerId], result.message);
+        }
+
+        res.json({
+            success: true,
+            data: result,
         });
     } catch (error) {
         next(error);

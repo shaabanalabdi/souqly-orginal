@@ -29,6 +29,16 @@ const quickLinks: QuickLink[] = [
   { to: '/admin', labelAr: 'الإدارة', labelEn: 'Admin', auth: true, admin: true },
 ];
 
+function countryFlagFromCode(code: string): string {
+  const upper = code.toUpperCase();
+  if (upper === 'SY') return '🇸🇾';
+  if (upper === 'JO') return '🇯🇴';
+  if (upper === 'LB') return '🇱🇧';
+  if (upper === 'PS') return '🇵🇸';
+  if (upper === 'IQ') return '🇮🇶';
+  return '🌍';
+}
+
 export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,6 +112,7 @@ export function AppLayout() {
             countries={marketplaceCountries.map((country) => ({
               code: country.code,
               label: pick(country.labelAr, country.labelEn),
+              flag: countryFlagFromCode(country.code),
             }))}
             selectedCountryCode={selectedCountry}
             onCountryChange={onCountryChange}
@@ -117,6 +128,7 @@ export function AppLayout() {
               searchPlaceholder: pick('ابحث عن سيارات، عقارات، خدمات...', 'Search cars, real estate, services...'),
               searchButton: pick('بحث', 'Search'),
               countryLabel: pick('الدولة', 'Country'),
+              chooseCountry: pick('اختيار الدولة', 'Choose Country'),
               login: pick('دخول', 'Login'),
               register: pick('حساب جديد', 'Register'),
               profile: pick('الملف الشخصي', 'Profile'),

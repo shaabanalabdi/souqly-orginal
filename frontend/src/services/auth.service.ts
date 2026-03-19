@@ -1,6 +1,25 @@
 import { requestData } from './client';
 import type { AccountType, SessionUser } from '../types/domain';
 
+function readCookie(name: string): string | null {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function withCsrfHeader(): { headers?: Record<string, string> } {
+  const token = readCookie('souqly_csrf_token');
+  if (!token) {
+    return {};
+  }
+
+  return {
+    headers: {
+      'x-csrf-token': token,
+    },
+  };
+}
+
 export interface RegisterPayload {
   email: string;
   password: string;
@@ -115,6 +134,7 @@ export const authService = {
     return requestData<RefreshResult>({
       method: 'POST',
       url: '/auth/refresh',
+      ...withCsrfHeader(),
     });
   },
 
@@ -122,6 +142,7 @@ export const authService = {
     return requestData<{ loggedOut: true }>({
       method: 'POST',
       url: '/auth/logout',
+      ...withCsrfHeader(),
     });
   },
 

@@ -1,5 +1,12 @@
 import { requestData, requestPaginated } from './client';
-import type { ChatMessage, Offer, ThreadSummary } from '../types/domain';
+import type {
+  ChatMessage,
+  ContactRequestState,
+  Offer,
+  OfferListItem,
+  OfferStatus,
+  ThreadSummary,
+} from '../types/domain';
 
 export interface SendMessagePayload {
   type?: 'TEXT' | 'IMAGE';
@@ -18,6 +25,10 @@ export interface RespondOfferPayload {
   counterAmount?: number;
 }
 
+export interface RespondPhoneRequestPayload {
+  action: 'approve' | 'reject';
+}
+
 export const chatsService = {
   createOrGetThread(listingId: number) {
     return requestData<{ created: boolean; thread: ThreadSummary }>({
@@ -32,6 +43,14 @@ export const chatsService = {
       method: 'GET',
       url: '/chats/threads',
       params: { page, limit },
+    });
+  },
+
+  listOffers(params: { status?: OfferStatus; page?: number; limit?: number } = {}) {
+    return requestPaginated<OfferListItem>({
+      method: 'GET',
+      url: '/chats/offers',
+      params,
     });
   },
 
@@ -63,6 +82,21 @@ export const chatsService = {
       method: 'POST',
       url: `/chats/threads/${threadId}/phone-request`,
       data: { message },
+    });
+  },
+
+  getPhoneRequestState(threadId: number) {
+    return requestData<ContactRequestState>({
+      method: 'GET',
+      url: `/chats/threads/${threadId}/phone-request`,
+    });
+  },
+
+  respondPhoneRequest(threadId: number, payload: RespondPhoneRequestPayload) {
+    return requestData<{ request: ContactRequestState; message: ChatMessage }>({
+      method: 'PATCH',
+      url: `/chats/threads/${threadId}/phone-request`,
+      data: payload,
     });
   },
 

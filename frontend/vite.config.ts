@@ -6,6 +6,20 @@ const backendTarget = process.env.VITE_DEV_BACKEND_URL || 'http://localhost:5000
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'scheduler'],
+          'vendor-router': ['react-router-dom'],
+          'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector', 'i18next-http-backend'],
+          'vendor-realtime': ['socket.io-client'],
+          'vendor-data': ['axios', 'zustand'],
+          'vendor-map': ['leaflet', 'react-leaflet'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

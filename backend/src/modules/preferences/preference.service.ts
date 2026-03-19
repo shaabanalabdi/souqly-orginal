@@ -220,7 +220,7 @@ export async function listFavorites(
         userId,
         listing: {
             status: {
-                not: ListingStatus.DELETED,
+                not: ListingStatus.ARCHIVED,
             },
         },
     };

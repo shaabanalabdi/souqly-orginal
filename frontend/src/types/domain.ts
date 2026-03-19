@@ -3,18 +3,20 @@ export type AccountType = 'INDIVIDUAL' | 'STORE' | 'CRAFTSMAN';
 export type StaffRole = 'NONE' | 'MODERATOR' | 'ADMIN';
 export type IdentityVerificationStatus = 'NONE' | 'PENDING' | 'VERIFIED' | 'REJECTED';
 export type TrustTier = 'NEW' | 'VERIFIED' | 'TRUSTED' | 'TOP_SELLER';
-export type ListingStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SOLD' | 'EXPIRED' | 'DELETED';
+export type ListingStatus = 'DRAFT' | 'PENDING' | 'ACTIVE' | 'REJECTED' | 'EXPIRED' | 'SOLD' | 'ARCHIVED';
 export type ListingCondition = 'NEW' | 'USED';
+export type ContactVisibility = 'HIDDEN' | 'VISIBLE' | 'APPROVAL';
 export type MessageType = 'TEXT' | 'IMAGE' | 'OFFER' | 'PHONE_REQUEST' | 'SYSTEM';
 export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COUNTERED';
-export type DealStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
+export type DealStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'RATED' | 'CANCELLED' | 'DISPUTED';
 export type EscrowStatus = 'NONE' | 'HELD' | 'RELEASED' | 'REFUNDED';
 export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED';
 export type DeliveryMethod = 'PICKUP' | 'COURIER';
 export type ReportStatus = 'PENDING' | 'RESOLVED' | 'DISMISSED';
 export type ReportReason = 'FRAUD' | 'INAPPROPRIATE' | 'DUPLICATE' | 'SPAM' | 'OTHER';
 export type AttributeType = 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTISELECT' | 'BOOLEAN' | 'DATE';
-export type StoreSubscriptionStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELED';
+export type StoreSubscriptionStatus = 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'CANCELED';
+export type PaymentAttemptStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
 export type StorePlanAnalyticsLevel = 'basic' | 'advanced';
 
 export interface StorePlanDto {
@@ -32,11 +34,29 @@ export interface StoreSubscriptionDto {
   planCode: string;
   planName: string;
   status: StoreSubscriptionStatus;
-  startedAt: string;
+  startedAt: string | null;
+  activatedAt: string | null;
   expiresAt: string;
   autoRenew: boolean;
   priceUsd: number;
   daysRemaining: number;
+  checkoutPending: boolean;
+}
+
+export interface StoreSubscriptionPaymentAttemptDto {
+  status: PaymentAttemptStatus;
+  amountUsd: number;
+  currency: string;
+  checkoutToken: string;
+  checkoutUrl: string | null;
+  providerRef: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface StoreSubscriptionCheckoutDto {
+  subscription: StoreSubscriptionDto;
+  paymentAttempt: StoreSubscriptionPaymentAttemptDto;
 }
 
 export interface CurrentStoreSubscriptionDto {
@@ -69,6 +89,42 @@ export interface UpsertBusinessProfileResult {
   profile: BusinessProfileDto;
 }
 
+export interface PublicStoreProfileDto {
+  userId: number;
+  fullName: string | null;
+  companyName: string;
+  website: string | null;
+  verifiedByAdmin: boolean;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
+export interface StoreAnalyticsDto {
+  storeId: number;
+  from: string;
+  to: string;
+  metrics: {
+    activeListings: number;
+    totalListings: number;
+    listingViews: number;
+    profileViews: number;
+    chatStarts: number;
+    offersReceived: number;
+    dealsCreated: number;
+  };
+}
+
+export interface CompactListingSummary {
+  id: number;
+  title: string;
+  description: string;
+  priceAmount: number | null;
+  currency: string | null;
+  status: ListingStatus;
+  coverImage: string | null;
+  createdAt: string;
+}
+
 export interface CraftsmanProfileDto {
   profession: string;
   experienceYears: number | null;
@@ -95,6 +151,62 @@ export interface UpsertCraftsmanProfileResult {
   created: boolean;
   verificationReset: boolean;
   profile: CraftsmanProfileDto;
+}
+
+export interface PublicCraftsmanProfileDto extends CraftsmanProfileDto {
+  userId: number;
+  fullName: string | null;
+  phone: string | null;
+  whatsappPhone: string | null;
+}
+
+export interface PublicUserProfileDto {
+  id: number;
+  fullName: string | null;
+  username: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  accountType: AccountType;
+  trustTier: TrustTier;
+  trustScore: number;
+  avgResponseHours: number | null;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  identityVerified: boolean;
+  stats: {
+    activeListings: number;
+    reviewsReceived: number;
+    completedDeals: number;
+  };
+  rating: number | null;
+  memberSince: string;
+}
+
+export interface PublicUserListing {
+  id: number;
+  title: string;
+  description: string;
+  priceAmount: number | null;
+  currency: string | null;
+  status: ListingStatus;
+  coverImage: string | null;
+  countryName: string;
+  cityName: string;
+  createdAt: string;
+}
+
+export interface PublicUserReview {
+  id: number;
+  dealId: number;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reviewer: {
+    id: number;
+    fullName: string | null;
+    username: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 export interface SessionUser {
@@ -237,7 +349,29 @@ export interface ListingSummary {
 export interface ListingDetails extends ListingSummary {
   images: Array<{ url: string; sortOrder: number }>;
   location: { lat: number | null; lng: number | null };
-  contact: { phoneVisible: boolean; whatsappVisible: boolean };
+  contact: {
+    phoneVisible: boolean;
+    whatsappVisible: boolean;
+    phoneVisibility: ContactVisibility;
+    whatsappVisibility: ContactVisibility;
+    phoneNumber: string | null;
+    whatsappNumber: string | null;
+  };
+  seller: {
+    id: number;
+    accountType: AccountType;
+    name: string;
+    username: string | null;
+    avatarUrl: string | null;
+    trustTier: TrustTier;
+    trustScore: number;
+    avgResponseHours: number | null;
+    rating: number | null;
+    reviewCount: number;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+    identityVerified: boolean;
+  };
   attributes: Array<{ attributeId: number; name: string; value: string }>;
 }
 
@@ -260,8 +394,11 @@ export interface CreateListingPayload {
   moqUnit?: string;
   locationLat?: number;
   locationLng?: number;
-  phoneVisibility?: boolean;
-  whatsappVisibility?: boolean;
+  saveAsDraft?: boolean;
+  phoneNumber?: string;
+  whatsappNumber?: string;
+  phoneVisibility?: ContactVisibility;
+  whatsappVisibility?: ContactVisibility;
   images: string[];
   attributes?: Array<{ attributeDefinitionId: number; value: string }>;
 }
@@ -309,9 +446,24 @@ export interface SavedSearch {
   createdAt: string;
 }
 
+export interface AppNotification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  targetType: string | null;
+  targetId: number | null;
+  link: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
 export interface ThreadSummary {
   id: number;
   listingId: number;
+  buyerId: number;
+  sellerId: number;
   otherUserId: number;
   unreadCount: number;
   lastMessageAt: string | null;
@@ -343,6 +495,18 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface ContactRequestState {
+  threadId: number;
+  status: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  requesterUserId: number | null;
+  sellerUserId: number | null;
+  phoneApproved: boolean;
+  whatsappApproved: boolean;
+  requestedMessage: string | null;
+  respondedAt: string | null;
+  createdAt: string | null;
+}
+
 export interface Offer {
   id: number;
   threadId: number;
@@ -355,6 +519,17 @@ export interface Offer {
   counterAmount: number | null;
   createdAt: string;
   respondedAt: string | null;
+}
+
+export interface OfferListItem extends Offer {
+  otherUserId: number;
+  listing: {
+    id: number;
+    title: string;
+    coverImage: string | null;
+    priceAmount: number | null;
+    currency: string | null;
+  };
 }
 
 export interface Deal {
@@ -478,6 +653,29 @@ export interface AdminReport {
     title: string;
     status: ListingStatus;
   } | null;
+}
+
+export interface AdminDispute {
+  id: number;
+  dealId: number;
+  openedByUserId: number;
+  reason: string;
+  description: string;
+  status: DisputeStatus;
+  resolvedByAdmin: number | null;
+  resolution: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  deal: {
+    id: number;
+    status: DealStatus;
+    finalPrice: number;
+    currency: string;
+    buyerId: number;
+    sellerId: number;
+    listingId: number;
+    listingTitle: string;
+  };
 }
 
 export interface AdminUser {

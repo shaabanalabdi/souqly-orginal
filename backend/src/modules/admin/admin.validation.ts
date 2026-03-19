@@ -1,11 +1,10 @@
-import { AccountType, IdentityVerificationStatus, ListingStatus, ReportStatus, Role, StaffRole } from '@prisma/client';
+import { AccountType, DisputeStatus, IdentityVerificationStatus, ListingStatus, ReportStatus, StaffRole } from '@prisma/client';
 import { z } from 'zod';
 
 export const paginationQuerySchema = z.object({
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(100).optional(),
     status: z.string().optional(),
-    role: z.nativeEnum(Role).optional(),
     accountType: z.nativeEnum(AccountType).optional(),
     staffRole: z.nativeEnum(StaffRole).optional(),
     active: z.coerce.boolean().optional(),
@@ -41,21 +40,12 @@ export const resolveReportBodySchema = z.object({
 
 export const moderateUserBodySchema = z
     .object({
-        action: z.enum(['activate', 'deactivate', 'ban', 'unban', 'set_role', 'set_staff_role', 'set_account_type']),
-        role: z.nativeEnum(Role).optional(),
+        action: z.enum(['activate', 'deactivate', 'ban', 'unban', 'set_staff_role', 'set_account_type']),
         staffRole: z.nativeEnum(StaffRole).optional(),
         accountType: z.nativeEnum(AccountType).optional(),
         reason: z.string().trim().max(500).optional(),
     })
     .superRefine((value, ctx) => {
-        if (value.action === 'set_role' && !value.role) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ['role'],
-                message: 'role is required when action is set_role.',
-            });
-        }
-
         if (value.action === 'set_staff_role' && !value.staffRole) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
@@ -77,6 +67,15 @@ export const listFraudFlagsQuerySchema = z.object({
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(100).optional(),
     listingId: z.coerce.number().int().positive().optional(),
+});
+
+export const listDisputesQuerySchema = z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+    status: z.nativeEnum(DisputeStatus).optional(),
+    dealId: z.coerce.number().int().positive().optional(),
+    openedByUserId: z.coerce.number().int().positive().optional(),
+    lang: z.string().optional(),
 });
 
 export const listIdentityVerificationQuerySchema = z.object({
@@ -129,6 +128,12 @@ export const runSavedSearchDigestBodySchema = z.object({
     frequency: z.enum(['daily', 'weekly', 'both']).optional().default('both'),
 });
 
+export const updateAdminConfigBodySchema = z.object({
+    config: z.record(z.string(), z.unknown()),
+    replace: z.coerce.boolean().optional().default(false),
+    changeNote: z.string().trim().max(2000).optional(),
+});
+
 export const savedSearchDigestHistoryQuerySchema = z.object({
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(100).optional(),
@@ -164,9 +169,20 @@ export function normalizeReportStatus(rawStatus: string | undefined): ReportStat
     return undefined;
 }
 
+export function normalizeDisputeStatus(rawStatus: string | undefined): DisputeStatus | undefined {
+    if (!rawStatus) {
+        return undefined;
+    }
+
+    if (rawStatus === DisputeStatus.OPEN) return DisputeStatus.OPEN;
+    if (rawStatus === DisputeStatus.UNDER_REVIEW) return DisputeStatus.UNDER_REVIEW;
+    if (rawStatus === DisputeStatus.RESOLVED) return DisputeStatus.RESOLVED;
+    return undefined;
+}
+
 export function mapListingActionToStatus(action: 'approve' | 'reject' | 'suspend' | 'delete'): ListingStatus {
     if (action === 'approve') return ListingStatus.ACTIVE;
     if (action === 'reject') return ListingStatus.REJECTED;
     if (action === 'suspend') return ListingStatus.EXPIRED;
-    return ListingStatus.DELETED;
+    return ListingStatus.ARCHIVED;
 }

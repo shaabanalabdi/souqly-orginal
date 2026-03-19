@@ -4,6 +4,7 @@ import type {
   AdminBlacklistEntry,
   AdminDashboardStats,
   AdminFeaturedListingResult,
+  AdminDispute,
   AdminFraudFlag,
   AdminIdentityVerification,
   AdminSavedSearchDigestHistoryEntry,
@@ -32,8 +33,7 @@ export interface ModerateListingPayload {
 }
 
 export interface ModerateUserPayload {
-  action: 'activate' | 'deactivate' | 'ban' | 'unban' | 'set_role' | 'set_staff_role' | 'set_account_type';
-  role?: UserRole;
+  action: 'activate' | 'deactivate' | 'ban' | 'unban' | 'set_staff_role' | 'set_account_type';
   staffRole?: StaffRole;
   accountType?: AccountType;
   reason?: string;
@@ -68,6 +68,14 @@ export const adminService = {
       method: 'GET',
       url: '/admin/reports',
       params: { status, page, limit },
+    });
+  },
+
+  listDisputes(params: { status?: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED'; dealId?: number; openedByUserId?: number; page?: number; limit?: number } = {}) {
+    return requestPaginated<AdminDispute>({
+      method: 'GET',
+      url: '/admin/disputes',
+      params,
     });
   },
 
@@ -129,7 +137,6 @@ export const adminService = {
 
   listUsers(
     params: {
-      role?: UserRole;
       staffRole?: StaffRole;
       accountType?: AccountType;
       active?: boolean;

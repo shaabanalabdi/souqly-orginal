@@ -1,6 +1,7 @@
 import { IdentityVerificationStatus } from '@prisma/client';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
 import { prisma } from '../../shared/utils/prisma.js';
+import { sanitizeNullableText } from '../../shared/utils/sanitize.js';
 import type { IdentityVerificationRequestBody } from './verification.validation.js';
 
 interface IdentityVerificationRequestDto {
@@ -156,11 +157,11 @@ export async function submitIdentityVerification(
             userId: user.id,
             status: IdentityVerificationStatus.PENDING,
             documentType: payload.documentType,
-            documentNumberMasked: payload.documentNumberMasked,
+            documentNumberMasked: sanitizeNullableText(payload.documentNumberMasked),
             documentFrontUrl: payload.documentFrontUrl,
             documentBackUrl: payload.documentBackUrl,
             selfieUrl: payload.selfieUrl,
-            note: payload.note,
+            note: sanitizeNullableText(payload.note),
             submittedAt: new Date(),
         },
         select: {

@@ -27,12 +27,6 @@ export interface CreateReviewPayload {
   comment?: string;
 }
 
-export interface HoldEscrowPayload {
-  amount?: number;
-  currency?: string;
-  providerRef?: string;
-}
-
 export interface OpenDisputePayload {
   reason: string;
   description: string;
@@ -43,7 +37,7 @@ export interface ReviewDisputePayload {
 }
 
 export interface ResolveDisputePayload {
-  action: 'release_escrow' | 'refund_escrow' | 'close_no_escrow';
+  action: 'close_no_escrow';
   resolution?: string;
 }
 
@@ -68,28 +62,6 @@ export const dealsService = {
     return requestData<Deal>({
       method: 'PATCH',
       url: `/deals/${dealId}/confirm`,
-    });
-  },
-
-  holdEscrow(dealId: number, payload: HoldEscrowPayload = {}) {
-    return requestData<Deal>({
-      method: 'PATCH',
-      url: `/deals/${dealId}/escrow/hold`,
-      data: payload,
-    });
-  },
-
-  releaseEscrow(dealId: number) {
-    return requestData<Deal>({
-      method: 'PATCH',
-      url: `/deals/${dealId}/escrow/release`,
-    });
-  },
-
-  refundEscrow(dealId: number) {
-    return requestData<Deal>({
-      method: 'PATCH',
-      url: `/deals/${dealId}/escrow/refund`,
     });
   },
 

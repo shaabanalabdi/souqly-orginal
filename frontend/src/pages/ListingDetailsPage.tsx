@@ -3,12 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ListingCard } from '../components/ListingCard';
 import { SellerCard } from '../components/SellerCard';
 import { EmptyState } from '../components/EmptyState';
+import { Button, Input, Modal } from '../components/ui';
 import { listingsService } from '../services/listings.service';
 import { chatsService } from '../services/chats.service';
+import { reportsService } from '../services/reports.service';
 import { asHttpError } from '../services/http';
 import { useAuthStore } from '../store/authStore';
-import type { ListingDetails, ListingSummary } from '../types/domain';
+import type { DeliveryMethod, ListingDetails, ListingSummary, ReportReason } from '../types/domain';
 import { useLocaleSwitch } from '../utils/localeSwitch';
+import { addRecentlyViewedListingId } from '../utils/recentlyViewed';
 
 function toCardListing(listing: ListingSummary) {
   return {
@@ -20,6 +23,29 @@ function toCardListing(listing: ListingSummary) {
     imageUrl: listing.coverImage ?? undefined,
     badge: listing.isFeatured ? 'Featured' : undefined,
   };
+}
+
+function getSellerProfilePath(listing: ListingDetails): string {
+  if (listing.seller.accountType === 'STORE') {
+    return `/stores/${listing.seller.id}`;
+  }
+  if (listing.seller.accountType === 'CRAFTSMAN') {
+    return `/craftsmen/${listing.seller.id}`;
+  }
+  return `/users/${listing.seller.id}`;
+}
+
+function getResponseTimeLabel(hours: number | null, pick: (ar: string, en: string) => string): string {
+  if (hours === null) {
+    return pick('غير متوفر', 'Not available');
+  }
+  if (hours < 1) {
+    return pick('أقل من ساعة', 'Less than 1 hour');
+  }
+  if (hours === 1) {
+    return pick('خلال ساعة', 'Within 1 hour');
+  }
+  return pick(`خلال ${hours} ساعات`, `Within ${hours} hours`);
 }
 
 export function ListingDetailsPage() {
@@ -37,8 +63,26 @@ export function ListingDetailsPage() {
   const [offerValue, setOfferValue] = useState('');
   const [offerError, setOfferError] = useState('');
   const [threadId, setThreadId] = useState<number | null>(null);
+  const [requestPhoneOpen, setRequestPhoneOpen] = useState(false);
+  const [sendOfferOpen, setSendOfferOpen] = useState(false);
+  const [phoneRequestNote, setPhoneRequestNote] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const [createDealOpen, setCreateDealOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<ReportReason>('FRAUD');
+  const [reportDescription, setReportDescription] = useState('');
+  const [dealAmount, setDealAmount] = useState('');
+  const [dealQuantity, setDealQuantity] = useState('1');
+  const [dealMeetingPlace, setDealMeetingPlace] = useState('');
+  const [dealDeliveryMethod, setDealDeliveryMethod] = useState<DeliveryMethod>('PICKUP');
+  const [dealError, setDealError] = useState('');
 
   const listingId = Number(id);
+
+  useEffect(() => {
+    if (Number.isInteger(listingId) && listingId > 0) {
+      addRecentlyViewedListingId(listingId);
+    }
+  }, [listingId]);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -99,15 +143,20 @@ export function ListingDetailsPage() {
     }
   };
 
-  const handleRequestPhone = async () => {
+  const handleRequestPhone = async (requestMessage?: string) => {
     if (!listing) return;
     if (handleRequireAuth()) return;
 
     try {
       const nextThreadId = await ensureThread();
       if (!nextThreadId) return;
-      await chatsService.requestPhone(nextThreadId, pick('يرجى مشاركة رقم الهاتف.', 'Please share your phone number.'));
+      await chatsService.requestPhone(
+        nextThreadId,
+        requestMessage || pick('يرجى مشاركة رقم الهاتف.', 'Please share your phone number.'),
+      );
       setActionMessage(pick('تم إرسال طلب رقم الهاتف.', 'Phone request sent.'));
+      setRequestPhoneOpen(false);
+      setPhoneRequestNote('');
     } catch (error) {
       setActionMessage(asHttpError(error).message);
     }
@@ -130,6 +179,79 @@ export function ListingDetailsPage() {
       await chatsService.createOffer(nextThreadId, { amount: parsed, quantity: 1 });
       setOfferValue('');
       setActionMessage(pick('تم إرسال العرض بنجاح.', 'Offer sent successfully.'));
+      setSendOfferOpen(false);
+    } catch (error) {
+      setActionMessage(asHttpError(error).message);
+    }
+  };
+
+  const handleReportListing = async () => {
+    if (!listing) return;
+    if (handleRequireAuth()) return;
+
+    try {
+      await reportsService.create({
+        reportableType: 'LISTING',
+        reportableId: listing.id,
+        listingId: listing.id,
+        reason: reportReason,
+        description: reportDescription.trim() || undefined,
+      });
+      setReportOpen(false);
+      setReportDescription('');
+      setActionMessage(pick('تم إرسال البلاغ للإدارة.', 'Report was submitted successfully.'));
+    } catch (error) {
+      setActionMessage(asHttpError(error).message);
+    }
+  };
+
+  const handleCreateDealIntent = async () => {
+    if (!listing) return;
+    if (handleRequireAuth()) return;
+
+    const parsedAmount = Number(dealAmount);
+    const parsedQuantity = Number(dealQuantity);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setDealError(pick('قيمة الصفقة غير صالحة.', 'Deal amount is invalid.'));
+      return;
+    }
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      setDealError(pick('الكمية يجب أن تكون أكبر من صفر.', 'Quantity must be greater than zero.'));
+      return;
+    }
+
+    setDealError('');
+
+    try {
+      const nextThreadId = await ensureThread();
+      if (!nextThreadId) return;
+
+      const dealContext = [
+        `${pick('طلب صفقة', 'Deal request')}`,
+        `${pick('طريقة التسليم', 'Delivery method')}: ${dealDeliveryMethod}`,
+        dealMeetingPlace.trim().length > 0 ? `${pick('مكان اللقاء', 'Meeting place')}: ${dealMeetingPlace.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      await chatsService.createOffer(nextThreadId, {
+        amount: parsedAmount,
+        quantity: parsedQuantity,
+        message: dealContext,
+      });
+
+      setCreateDealOpen(false);
+      setDealAmount('');
+      setDealQuantity('1');
+      setDealMeetingPlace('');
+      setDealDeliveryMethod('PICKUP');
+      setActionMessage(
+        pick(
+          'تم إرسال عرض الصفقة. بعد قبول العرض سيتم إنشاء Deal رسميًا.',
+          'Deal offer was sent. The formal deal will be created after seller acceptance.',
+        ),
+      );
     } catch (error) {
       setActionMessage(asHttpError(error).message);
     }
@@ -139,6 +261,14 @@ export function ListingDetailsPage() {
   const attributes = listing?.attributes ?? [];
 
   const cardListings = useMemo(() => similarListings.map(toCardListing), [similarListings]);
+
+  const openListing = (id: number | string) => {
+    const parsed = Number(id);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      addRecentlyViewedListingId(parsed);
+    }
+    navigate(`/listings/${id}`);
+  };
 
   if (loading) {
     return <div className="space-y-4"><div className="h-72 animate-pulse rounded-2xl bg-slate-200" /></div>;
@@ -252,38 +382,48 @@ export function ListingDetailsPage() {
               sectionLabel: pick('حالة التوثيق', 'Verification Status'),
             }}
             onMessage={() => void handleMessage()}
-            onRequestPhone={() => void handleRequestPhone()}
-            onSendOffer={() => void handleSendOffer()}
+            onRequestPhone={() => setRequestPhoneOpen(true)}
+            onSendOffer={() => setSendOfferOpen(true)}
             onWhatsApp={() => {
               if (handleRequireAuth()) return;
               window.open('https://wa.me', '_blank', 'noopener,noreferrer');
             }}
           />
-
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-            <h3 className="text-sm font-bold text-ink">{pick('إرسال عرض سعر', 'Send an Offer')}</h3>
-            <div className="mt-3 space-y-2">
-              <input
-                type="number"
-                min={1}
-                value={offerValue}
-                onChange={(event) => setOfferValue(event.target.value)}
-                placeholder={pick('قيمة العرض', 'Offer amount')}
-                className={`h-11 w-full rounded-xl border px-3 text-sm outline-none ${
-                  offerError ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-200'
-                }`}
-              />
-              {offerError ? <p className="text-xs text-rose-600">{offerError}</p> : null}
-              <button
-                type="button"
-                onClick={() => void handleSendOffer()}
-                className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-900"
-              >
-                {pick('إرسال', 'Submit')}
-              </button>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-ink">{listing.seller.name}</p>
+                <p className="text-xs text-muted">
+                  {listing.seller.accountType} · {getResponseTimeLabel(listing.seller.avgResponseHours, pick)}
+                </p>
+              </div>
+              <Button variant="secondary" onClick={() => navigate(getSellerProfilePath(listing))}>
+                {pick('عرض الملف العام', 'View Profile')}
+              </Button>
             </div>
+            {listing.contact.whatsappNumber ? (
+              <div className="mt-3">
+                <Button
+                  onClick={() => window.open(`https://wa.me/${listing.contact.whatsappNumber?.replace(/[^\d]/g, '')}`, '_blank', 'noopener,noreferrer')}
+                >
+                  WhatsApp
+                </Button>
+              </div>
+            ) : null}
           </section>
           {actionMessage ? <p className="text-sm text-emerald-700">{actionMessage}</p> : null}
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
+            <h3 className="text-sm font-bold text-ink">{pick('إجراءات إضافية', 'Additional Actions')}</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => setCreateDealOpen(true)}>
+                {pick('إنشاء صفقة', 'Create Deal')}
+              </Button>
+              <Button variant="ghost" onClick={() => setReportOpen(true)}>
+                {pick('الإبلاغ عن الإعلان', 'Report Listing')}
+              </Button>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -307,12 +447,183 @@ export function ListingDetailsPage() {
                 imageUrl={item.imageUrl}
                 badge={item.badge}
                 locale={locale}
-                onOpen={(nextId) => navigate(`/listings/${nextId}`)}
+                onOpen={openListing}
               />
             ))}
           </div>
         )}
       </section>
+
+      <Modal
+        isOpen={requestPhoneOpen}
+        onClose={() => setRequestPhoneOpen(false)}
+        title={pick('طلب رقم الهاتف', 'Request Phone Number')}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRequestPhoneOpen(false)}>
+              {pick('إلغاء', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleRequestPhone(phoneRequestNote)}>
+              {pick('إرسال الطلب', 'Send Request')}
+            </Button>
+          </div>
+        )}
+      >
+        <p className="mb-3 text-sm text-muted">
+          {pick(
+            'يمكنك إضافة رسالة قصيرة توضح سبب طلب الرقم.',
+            'You can include a short note explaining why you need the phone number.',
+          )}
+        </p>
+        <textarea
+          value={phoneRequestNote}
+          onChange={(event) => setPhoneRequestNote(event.target.value)}
+          placeholder={pick('مثال: أريد تأكيد موقع الاستلام قبل الشراء', 'Example: I want to confirm pickup location before purchase')}
+          className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-primary"
+        />
+      </Modal>
+
+      <Modal
+        isOpen={sendOfferOpen}
+        onClose={() => setSendOfferOpen(false)}
+        title={pick('إرسال عرض سعر', 'Send Offer')}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSendOfferOpen(false)}>
+              {pick('إلغاء', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleSendOffer()}>
+              {pick('إرسال العرض', 'Send Offer')}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-2">
+          <Input
+            type="number"
+            min={1}
+            value={offerValue}
+            onChange={(event) => setOfferValue(event.target.value)}
+            label={pick('قيمة العرض', 'Offer amount')}
+            placeholder={pick('أدخل السعر المقترح', 'Enter your proposed price')}
+            error={offerError || undefined}
+          />
+          {listing ? (
+            <p className="text-xs text-muted">
+              {pick('السعر الحالي', 'Current price')}: {new Intl.NumberFormat(locale, {
+                style: 'currency',
+                currency: listing.currency ?? 'USD',
+                maximumFractionDigits: 0,
+              }).format(listing.priceAmount ?? 0)}
+            </p>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        title={pick('الإبلاغ عن الإعلان', 'Report Listing')}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setReportOpen(false)}>
+              {pick('إلغاء', 'Cancel')}
+            </Button>
+            <Button variant="danger" onClick={() => void handleReportListing()}>
+              {pick('إرسال البلاغ', 'Submit Report')}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-3">
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-ink">{pick('سبب البلاغ', 'Reason')}</span>
+            <select
+              value={reportReason}
+              onChange={(event) => setReportReason(event.target.value as ReportReason)}
+              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="FRAUD">FRAUD</option>
+              <option value="INAPPROPRIATE">INAPPROPRIATE</option>
+              <option value="DUPLICATE">DUPLICATE</option>
+              <option value="SPAM">SPAM</option>
+              <option value="OTHER">OTHER</option>
+            </select>
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-ink">{pick('تفاصيل إضافية', 'Additional details')}</span>
+            <textarea
+              value={reportDescription}
+              onChange={(event) => setReportDescription(event.target.value)}
+              placeholder={pick('اشرح المشكلة باختصار', 'Explain the issue briefly')}
+              className="min-h-28 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-primary"
+            />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={createDealOpen}
+        onClose={() => setCreateDealOpen(false)}
+        title={pick('إنشاء صفقة', 'Create Deal')}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setCreateDealOpen(false)}>
+              {pick('إلغاء', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleCreateDealIntent()}>
+              {pick('إرسال طلب الصفقة', 'Submit Deal Request')}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="grid gap-3">
+          <Input
+            type="number"
+            min={1}
+            value={dealAmount}
+            onChange={(event) => setDealAmount(event.target.value)}
+            label={pick('السعر النهائي المقترح', 'Proposed final price')}
+            placeholder={pick('أدخل السعر', 'Enter amount')}
+          />
+
+          <Input
+            type="number"
+            min={1}
+            value={dealQuantity}
+            onChange={(event) => setDealQuantity(event.target.value)}
+            label={pick('الكمية', 'Quantity')}
+          />
+
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-ink">{pick('طريقة التسليم', 'Delivery method')}</span>
+            <select
+              value={dealDeliveryMethod}
+              onChange={(event) => setDealDeliveryMethod(event.target.value as DeliveryMethod)}
+              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="PICKUP">{pick('استلام مباشر', 'Pickup')}</option>
+              <option value="COURIER">{pick('شركة شحن', 'Courier')}</option>
+            </select>
+          </label>
+
+          <Input
+            value={dealMeetingPlace}
+            onChange={(event) => setDealMeetingPlace(event.target.value)}
+            label={pick('مكان اللقاء (اختياري)', 'Meeting place (optional)')}
+            placeholder={pick('مثال: مول المدينة - البوابة 2', 'Example: City Mall - Gate 2')}
+          />
+
+          {dealError ? <p className="text-xs text-red-600">{dealError}</p> : null}
+          <p className="text-xs text-muted">
+            {pick(
+              'ملاحظة: في هذا الإصدار يتم بدء الصفقة عبر إرسال Offer منظم داخل المحادثة، وتُنشأ Deal رسميًا بعد القبول.',
+              'Note: in this version, deal flow starts by sending a structured offer in chat, and the formal deal is created after acceptance.',
+            )}
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

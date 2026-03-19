@@ -7,6 +7,7 @@ const CHAT_EVENTS = {
     THREAD_CREATED: 'chat:thread:created',
     MESSAGE_CREATED: 'chat:message:created',
     OFFER_UPDATED: 'chat:offer:updated',
+    TYPING_UPDATED: 'chat:typing',
     THREAD_JOIN: 'thread:join',
     THREAD_LEAVE: 'thread:leave',
     CHAT_ERROR: 'chat:error',
@@ -95,6 +96,33 @@ export function setupChatSocket(io: SocketServer): void {
             }
 
             socket.leave(threadRoom(threadId));
+        });
+
+        socket.on(CHAT_EVENTS.TYPING_UPDATED, async (payload: { threadId?: number; isTyping?: boolean } = {}) => {
+            const threadId = Number(payload.threadId);
+            if (!Number.isInteger(threadId) || threadId <= 0) {
+                socket.emit(CHAT_EVENTS.CHAT_ERROR, { code: 'INVALID_THREAD_ID' });
+                return;
+            }
+
+            const thread = await prisma.chatThread.findUnique({
+                where: { id: threadId },
+                select: {
+                    buyerId: true,
+                    sellerId: true,
+                },
+            });
+
+            if (!thread || (thread.buyerId !== userId && thread.sellerId !== userId)) {
+                socket.emit(CHAT_EVENTS.CHAT_ERROR, { code: 'FORBIDDEN_THREAD' });
+                return;
+            }
+
+            socket.to(threadRoom(threadId)).emit(CHAT_EVENTS.TYPING_UPDATED, {
+                threadId,
+                userId,
+                isTyping: Boolean(payload.isTyping),
+            });
         });
 
         socket.on('disconnect', () => {

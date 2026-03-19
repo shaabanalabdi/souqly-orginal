@@ -537,12 +537,13 @@
       "USED": "مستعمل"
     },
     "listingStatus": {
+      "DRAFT": "مسودة",
       "PENDING": "قيد الانتظار",
       "ACTIVE": "نشط",
       "REJECTED": "مرفوض",
       "SOLD": "مباع",
       "EXPIRED": "منتهي",
-      "DELETED": "محذوف"
+      "ARCHIVED": "مؤرشف"
     },
     "messageType": {
       "TEXT": "نصي",
@@ -561,6 +562,7 @@
       "PENDING": "قيد الانتظار",
       "CONFIRMED": "مؤكد",
       "COMPLETED": "مكتمل",
+      "RATED": "مقيّم",
       "CANCELLED": "ملغى",
       "DISPUTED": "متنازع عليه"
     },

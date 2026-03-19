@@ -30,6 +30,14 @@ export const registerBodySchema = z.object({
     password: strongPasswordSchema,
     fullName: z.string().trim().min(2).max(100),
     accountType: z.nativeEnum(AccountType).optional(),
+}).superRefine((value, ctx) => {
+    if (value.accountType && value.accountType !== AccountType.INDIVIDUAL) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['accountType'],
+            message: 'Self-registration is available only for individual accounts.',
+        });
+    }
 });
 
 export const verifyEmailQuerySchema = z.object({

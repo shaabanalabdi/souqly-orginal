@@ -2,7 +2,10 @@ import 'dotenv/config';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import app from './app.js';
+import { registerDomainEventHandlers } from './events/registerDomainEventHandlers.js';
 import { setupChatSocket } from './modules/chats/chat.socket.js';
+import { closeQueues, initializeQueues } from './queues/queueManager.js';
+import { startListingExpirationScheduler } from './shared/jobs/listingExpiration.job.js';
 import { startSavedSearchDigestScheduler } from './shared/jobs/savedSearchDigest.job.js';
 import { getAllowedOrigins } from './shared/config/origins.js';
 import { ensureBootstrapAdmin } from './shared/startup/bootstrapAdmin.js';
@@ -54,7 +57,7 @@ async function listenWithFallback(httpServer: ReturnType<typeof createServer>, p
 async function bootstrap(): Promise<void> {
     try {
         await prisma.$connect();
-        logger.info('MySQL connected');
+    logger.info('MySQL connected');
 
         // Keep local/dev environments always able to login.
         await ensureBootstrapAdmin();
@@ -73,7 +76,10 @@ async function bootstrap(): Promise<void> {
 
         setupChatSocket(io);
         app.set('io', io);
+        await initializeQueues({ io });
+        registerDomainEventHandlers();
 
+        const stopListingExpirationScheduler = startListingExpirationScheduler();
         const stopSavedSearchDigestScheduler = startSavedSearchDigestScheduler(io);
 
         const activePort = await listenWithFallback(httpServer, PORT);
@@ -82,10 +88,12 @@ async function bootstrap(): Promise<void> {
         logger.info(`Health: http://localhost:${activePort}/api/v1/health`);
 
         const shutdown = async (signal: string): Promise<void> => {
+            stopListingExpirationScheduler();
             stopSavedSearchDigestScheduler();
             logger.info(`${signal} received, shutting down...`);
 
             httpServer.close(async () => {
+                await closeQueues();
                 await prisma.$disconnect();
                 redis.disconnect();
                 logger.info('Server shut down');

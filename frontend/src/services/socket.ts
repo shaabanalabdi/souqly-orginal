@@ -5,6 +5,7 @@ const SOCKET_EVENTS = {
   THREAD_CREATED: 'chat:thread:created',
   MESSAGE_CREATED: 'chat:message:created',
   OFFER_UPDATED: 'chat:offer:updated',
+  TYPING_UPDATED: 'chat:typing',
   PLATFORM_NOTIFICATION: 'platform:notification',
   THREAD_JOIN: 'thread:join',
   THREAD_LEAVE: 'thread:leave',
@@ -25,6 +26,12 @@ export interface SocketOfferUpdatedPayload {
   threadId: number;
   offer: Offer;
   kind: 'created' | 'responded';
+}
+
+export interface SocketTypingPayload {
+  threadId: number;
+  userId: number;
+  isTyping: boolean;
 }
 
 export interface SocketPlatformNotificationPayload {
@@ -92,6 +99,10 @@ export function leaveThreadRoom(threadId: number): void {
   socket?.emit(SOCKET_EVENTS.THREAD_LEAVE, { threadId });
 }
 
+export function emitTypingUpdated(threadId: number, isTyping: boolean): void {
+  socket?.emit(SOCKET_EVENTS.TYPING_UPDATED, { threadId, isTyping });
+}
+
 export function onThreadCreated(handler: (payload: SocketThreadCreatedPayload) => void): () => void {
   socket?.on(SOCKET_EVENTS.THREAD_CREATED, handler);
   return () => socket?.off(SOCKET_EVENTS.THREAD_CREATED, handler);
@@ -105,6 +116,11 @@ export function onMessageCreated(handler: (payload: SocketMessageCreatedPayload)
 export function onOfferUpdated(handler: (payload: SocketOfferUpdatedPayload) => void): () => void {
   socket?.on(SOCKET_EVENTS.OFFER_UPDATED, handler);
   return () => socket?.off(SOCKET_EVENTS.OFFER_UPDATED, handler);
+}
+
+export function onTypingUpdated(handler: (payload: SocketTypingPayload) => void): () => void {
+  socket?.on(SOCKET_EVENTS.TYPING_UPDATED, handler);
+  return () => socket?.off(SOCKET_EVENTS.TYPING_UPDATED, handler);
 }
 
 export function onPlatformNotification(

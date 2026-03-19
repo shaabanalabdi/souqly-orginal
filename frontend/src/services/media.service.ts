@@ -7,9 +7,12 @@ export interface UploadedMediaItem {
   size: number;
 }
 
+export type MediaUploadKind = 'listing' | 'verification';
+
 export const mediaService = {
-  async uploadImages(files: File[]): Promise<UploadedMediaItem[]> {
+  async uploadImages(files: File[], kind: MediaUploadKind = 'listing'): Promise<UploadedMediaItem[]> {
     const formData = new FormData();
+    formData.append('kind', kind);
     for (const file of files) {
       formData.append('images', file);
     }

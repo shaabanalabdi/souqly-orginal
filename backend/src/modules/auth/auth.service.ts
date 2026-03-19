@@ -8,6 +8,8 @@ import { prisma } from '../../shared/utils/prisma.js';
 import { redis } from '../../shared/utils/redis.js';
 import { sendWhatsAppOTP } from '../../shared/utils/whatsapp.js';
 import { resetPasswordEmailHtml, sendEmail, verificationEmailHtml } from '../../shared/utils/email.js';
+import { domainEventBus } from '../../events/domainEvents.js';
+import { sanitizeText } from '../../shared/utils/sanitize.js';
 import type {
     ChangePasswordBody,
     FacebookOAuthBody,
@@ -495,15 +497,16 @@ export async function registerWithEmail(payload: RegisterBody): Promise<Register
     }
 
     const passwordHash = await hashPassword(payload.password);
+    const normalizedFullName = sanitizeText(payload.fullName);
 
     const user = await prisma.user.create({
         data: {
             email: payload.email,
             passwordHash,
-            accountType: payload.accountType,
+            accountType: 'INDIVIDUAL',
             profile: {
                 create: {
-                    fullName: payload.fullName,
+                    fullName: normalizedFullName,
                 },
             },
         },
@@ -513,7 +516,7 @@ export async function registerWithEmail(payload: RegisterBody): Promise<Register
         },
     });
 
-    await sendVerificationEmail(user.id, user.email ?? payload.email, payload.fullName);
+    await sendVerificationEmail(user.id, user.email ?? payload.email, normalizedFullName);
 
     return {
         userId: user.id,
@@ -550,6 +553,7 @@ export async function verifyEmailToken(token: string): Promise<void> {
     }
 
     await redis.del(redisKey);
+    domainEventBus.publish('EMAIL_VERIFIED', { userId });
 }
 
 export async function resendVerificationEmail(
@@ -806,6 +810,7 @@ export async function verifyPhoneOtp(
     });
 
     await redis.del(buildPendingPhoneVerificationKey(user.id));
+    domainEventBus.publish('PHONE_VERIFIED', { userId: user.id });
 
     return {
         verified: true,

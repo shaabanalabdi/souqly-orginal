@@ -1,14 +1,17 @@
-import type { FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import { Button, Dropdown, Modal } from './ui';
 
 export interface HeaderCountryOption {
   code: string;
   label: string;
+  flag?: string;
 }
 
 export interface HeaderLabels {
   searchPlaceholder: string;
   searchButton: string;
   countryLabel: string;
+  chooseCountry: string;
   login: string;
   register: string;
   profile: string;
@@ -38,6 +41,7 @@ const DEFAULT_LABELS: HeaderLabels = {
   searchPlaceholder: 'ابحث عن سيارات، عقارات، خدمات...',
   searchButton: 'بحث',
   countryLabel: 'الدولة',
+  chooseCountry: 'اختيار الدولة',
   login: 'دخول',
   register: 'حساب جديد',
   profile: 'الملف الشخصي',
@@ -51,6 +55,10 @@ function UserAvatar({ userName }: { userName?: string }) {
       {shortName}
     </span>
   );
+}
+
+function CountryOptionLabel({ option }: { option: HeaderCountryOption }) {
+  return <>{option.flag ? `${option.flag} ` : ''}{option.label}</>;
 }
 
 export function Header({
@@ -71,10 +79,17 @@ export function Header({
   onProfile,
   labels = DEFAULT_LABELS,
 }: HeaderProps) {
+  const [countryModalOpen, setCountryModalOpen] = useState(false);
+
   const handleSearchSubmit = (event: FormEvent) => {
     event.preventDefault();
     onSearchSubmit();
   };
+
+  const activeCountry = useMemo(
+    () => countries.find((country) => country.code === selectedCountryCode) ?? countries[0],
+    [countries, selectedCountryCode],
+  );
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -114,18 +129,15 @@ export function Header({
         <div className="flex flex-wrap items-center gap-2 md:justify-end">
           <label className="flex items-center gap-2 text-sm text-muted">
             <span>{labels.countryLabel}</span>
-            <select
-              value={selectedCountryCode}
-              onChange={(event) => onCountryChange(event.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-primary"
-              aria-label={labels.countryLabel}
+            <button
+              type="button"
+              onClick={() => setCountryModalOpen(true)}
+              className="inline-flex h-10 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition hover:bg-slate-50"
+              aria-label={labels.chooseCountry}
             >
-              {countries.map((country) => (
-                <option key={country.code} value={country.code}>
-                  {country.label}
-                </option>
-              ))}
-            </select>
+              <CountryOptionLabel option={activeCountry} />
+              <span className="material-symbols-outlined text-base">expand_more</span>
+            </button>
           </label>
 
           <button
@@ -140,22 +152,29 @@ export function Header({
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <UserAvatar userName={userName} />
-              {onProfile ? (
-                <button
-                  type="button"
-                  onClick={onProfile}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-ink hover:bg-slate-50"
-                >
-                  {labels.profile}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={onLogout}
-                className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-ink hover:bg-slate-200"
-              >
-                {labels.logout}
-              </button>
+              <Dropdown
+                triggerLabel={userName || labels.profile}
+                options={[
+                  {
+                    key: 'profile',
+                    label: labels.profile,
+                    icon: <span className="material-symbols-outlined text-base">person</span>,
+                  },
+                  {
+                    key: 'logout',
+                    label: labels.logout,
+                    icon: <span className="material-symbols-outlined text-base">logout</span>,
+                    tone: 'danger',
+                  },
+                ]}
+                onSelect={(key) => {
+                  if (key === 'profile') {
+                    onProfile?.();
+                    return;
+                  }
+                  onLogout();
+                }}
+              />
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -177,6 +196,37 @@ export function Header({
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={countryModalOpen}
+        onClose={() => setCountryModalOpen(false)}
+        title={labels.chooseCountry}
+      >
+        <div className="grid gap-2">
+          {countries.map((country) => {
+            const isSelected = country.code === selectedCountryCode;
+            return (
+              <button
+                key={country.code}
+                type="button"
+                onClick={() => {
+                  onCountryChange(country.code);
+                  setCountryModalOpen(false);
+                }}
+                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold transition ${isSelected ? 'border-primary bg-blue-50 text-primary' : 'border-slate-200 text-ink hover:bg-slate-50'}`}
+              >
+                <span><CountryOptionLabel option={country} /></span>
+                {isSelected ? <span className="material-symbols-outlined text-base">check</span> : null}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button variant="ghost" onClick={() => setCountryModalOpen(false)}>
+            {labels.searchButton === 'Search' ? 'Close' : 'إغلاق'}
+          </Button>
+        </div>
+      </Modal>
     </header>
   );
 }

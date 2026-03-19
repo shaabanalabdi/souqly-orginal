@@ -6,6 +6,7 @@ import {
     otpLimiter,
 } from '../../shared/middleware/rateLimiter.js';
 import { authenticate } from '../../shared/middleware/authenticate.js';
+import { requireCsrfToken } from '../../shared/middleware/csrf.js';
 import { validate } from '../../shared/middleware/validate.js';
 import {
     changePasswordController,
@@ -59,8 +60,8 @@ authRoutes.post(
     validate({ body: facebookOAuthBodySchema }),
     facebookOAuthLoginController,
 );
-authRoutes.post('/refresh', refreshController);
-authRoutes.post('/logout', logoutController);
+authRoutes.post('/refresh', requireCsrfToken, refreshController);
+authRoutes.post('/logout', requireCsrfToken, logoutController);
 authRoutes.post(
     '/forgot-password',
     forgotPasswordLimiter,

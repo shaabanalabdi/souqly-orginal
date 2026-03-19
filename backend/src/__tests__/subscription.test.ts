@@ -135,6 +135,7 @@ describe('Subscription routes', () => {
         const res = await request(app)
             .post('/api/v1/subscriptions/subscribe')
             .set('Authorization', `Bearer ${token}`)
+            .set('x-idempotency-key', 'sub-no-business-profile')
             .send({ planCode: BASIC.code });
 
         expect(res.status).toBe(403);
@@ -145,59 +146,104 @@ describe('Subscription routes', () => {
         const token = signAccessToken({ userId: 20, role: 'USER', trustTier: 'NEW' });
 
         jest.spyOn(prisma.businessProfile, 'findUnique').mockResolvedValue({ id: 7 } as never);
+        jest.spyOn(prisma.storeSubscriptionPaymentAttempt, 'findUnique').mockResolvedValue(null);
         jest.spyOn(prisma.storeSubscription, 'findUnique').mockResolvedValue(null);
         jest.spyOn(prisma.storeSubscription, 'create').mockResolvedValue({
+            id: 1,
+            userId: 20,
             planCode: PRO.code,
             planName: PRO.name,
-            status: StoreSubscriptionStatus.ACTIVE,
-            startedAt: new Date(),
+            status: StoreSubscriptionStatus.PENDING,
+            startedAt: null,
+            activatedAt: null,
             expiresAt: FUTURE,
             autoRenew: false,
             priceUsd: PRO.priceUsdMonthly,
+            lastCheckoutToken: 'checkout-sub-create',
+        } as never);
+        jest.spyOn(prisma.storeSubscriptionPaymentAttempt, 'create').mockResolvedValue({
+            userId: 20,
+            subscriptionId: 1,
+            planCode: PRO.code,
+            billingMonths: 1,
+            amountUsd: PRO.priceUsdMonthly,
+            currency: 'USD',
+            status: 'PENDING',
+            idempotencyKey: 'sub-create',
+            checkoutToken: 'checkout-sub-create',
+            providerRef: null,
+            expiresAt: FUTURE,
+            createdAt: new Date(),
         } as never);
 
         const res = await request(app)
             .post('/api/v1/subscriptions/subscribe')
             .set('Authorization', `Bearer ${token}`)
+            .set('x-idempotency-key', 'sub-create')
             .send({ planCode: PRO.code, billingCycleMonths: 1, autoRenew: false });
 
         expect(res.status).toBe(201);
         expect(res.body.success).toBe(true);
-        expect(res.body.data.planCode).toBe(PRO.code);
-        expect(res.body.data.status).toBe(StoreSubscriptionStatus.ACTIVE);
+        expect(res.body.data.subscription.planCode).toBe(PRO.code);
+        expect(res.body.data.subscription.status).toBe(StoreSubscriptionStatus.PENDING);
+        expect(res.body.data.paymentAttempt.status).toBe('PENDING');
     });
 
     it('POST /api/v1/subscriptions/subscribe extends existing same-plan active subscription', async () => {
         const token = signAccessToken({ userId: 20, role: 'USER', trustTier: 'NEW' });
 
         jest.spyOn(prisma.businessProfile, 'findUnique').mockResolvedValue({ id: 7 } as never);
+        jest.spyOn(prisma.storeSubscriptionPaymentAttempt, 'findUnique').mockResolvedValue(null);
         jest.spyOn(prisma.storeSubscription, 'findUnique').mockResolvedValue({
+            id: 9,
             userId: 20,
             planCode: PRO.code,
             planName: PRO.name,
             status: StoreSubscriptionStatus.ACTIVE,
             startedAt: new Date('2026-01-01'),
+            activatedAt: new Date('2026-01-01'),
             expiresAt: FUTURE,
             autoRenew: false,
             priceUsd: PRO.priceUsdMonthly,
+            lastCheckoutToken: null,
         } as never);
         jest.spyOn(prisma.storeSubscription, 'update').mockResolvedValue({
+            id: 9,
+            userId: 20,
             planCode: PRO.code,
             planName: PRO.name,
             status: StoreSubscriptionStatus.ACTIVE,
             startedAt: new Date('2026-01-01'),
+            activatedAt: new Date('2026-01-01'),
             expiresAt: new Date(FUTURE.getTime() + 30 * 24 * 60 * 60 * 1000),
             autoRenew: false,
             priceUsd: PRO.priceUsdMonthly,
+            lastCheckoutToken: 'checkout-sub-renew',
+        } as never);
+        jest.spyOn(prisma.storeSubscriptionPaymentAttempt, 'create').mockResolvedValue({
+            userId: 20,
+            subscriptionId: 9,
+            planCode: PRO.code,
+            billingMonths: 1,
+            amountUsd: PRO.priceUsdMonthly,
+            currency: 'USD',
+            status: 'PENDING',
+            idempotencyKey: 'sub-renew',
+            checkoutToken: 'checkout-sub-renew',
+            providerRef: null,
+            expiresAt: FUTURE,
+            createdAt: new Date(),
         } as never);
 
         const res = await request(app)
             .post('/api/v1/subscriptions/subscribe')
             .set('Authorization', `Bearer ${token}`)
+            .set('x-idempotency-key', 'sub-renew')
             .send({ planCode: PRO.code, billingCycleMonths: 1 });
 
         expect(res.status).toBe(201);
-        expect(res.body.data.planCode).toBe(PRO.code);
+        expect(res.body.data.subscription.planCode).toBe(PRO.code);
+        expect(res.body.data.paymentAttempt.status).toBe('PENDING');
     });
 
     it('POST /api/v1/subscriptions/subscribe rejects invalid planCode', async () => {

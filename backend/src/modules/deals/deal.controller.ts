@@ -3,7 +3,9 @@ import type { Server as SocketServer } from 'socket.io';
 import type { StaffRole } from '@prisma/client';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
 import { emitPlatformNotification } from '../../shared/realtime/notifications.js';
+import { isInternalEscrowEnabled } from '../../shared/config/systemConfig.js';
 import { getRequestLanguage } from '../../shared/utils/language.js';
+import { notifyUsers } from '../notifications/notification.service.js';
 import {
     holdDealEscrow,
     openDealDispute,
@@ -15,6 +17,7 @@ import {
     confirmDeal,
     createDealFromOffer,
     createDealReview,
+    getDealById,
     listMyDeals,
 } from './deal.service.js';
 import type {
@@ -44,8 +47,28 @@ function requireActor(req: Request): { userId: number; staffRole: StaffRole } {
     };
 }
 
+function requireIdempotencyKey(req: Request): string {
+    const key = req.header('x-idempotency-key')?.trim();
+    if (!key) {
+        throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'x-idempotency-key header is required.');
+    }
+
+    return key;
+}
+
 function getSocketServer(req: Request): SocketServer | null {
     return (req.app.get('io') as SocketServer | undefined) ?? null;
+}
+
+async function assertEscrowEnabledAtLaunch(): Promise<void> {
+    const enabled = await isInternalEscrowEnabled();
+    if (!enabled) {
+        throw new ApiError(
+            410,
+            'INTERNAL_ESCROW_DISABLED_AT_LAUNCH',
+            'Internal escrow and payment handling are disabled at launch for Souqly.',
+        );
+    }
 }
 
 function assertEscrowWebhookSecret(req: Request): void {
@@ -106,6 +129,21 @@ export async function listMyDealsController(req: Request, res: Response, next: N
             success: true,
             data: result.items,
             meta: result.meta,
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getDealByIdController(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const actor = requireActor(req);
+        const lang = getRequestLanguage(req);
+        const deal = await getDealById(actor, Number(req.params.id), lang);
+
+        res.json({
+            success: true,
+            data: deal,
         });
     } catch (error) {
         next(error);
@@ -178,8 +216,24 @@ export async function holdDealEscrowController(
     next: NextFunction,
 ): Promise<void> {
     try {
+        await assertEscrowEnabledAtLaunch();
         const userId = requireUserId(req);
-        const deal = await holdDealEscrow(userId, Number(req.params.id), req.body as HoldEscrowBody);
+        const deal = await holdDealEscrow(
+            userId,
+            Number(req.params.id),
+            req.body as HoldEscrowBody,
+            requireIdempotencyKey(req),
+        );
+
+        await notifyUsers([deal.buyerId, deal.sellerId], {
+            type: 'ESCROW_HELD',
+            title: `Escrow held for deal #${deal.id}`,
+            body: `Escrow status is now ${deal.escrow.status}.`,
+            link: '/deals',
+            targetType: 'deal',
+            targetId: deal.id,
+            dedupKey: `escrow-held:${deal.id}`,
+        });
 
         const io = getSocketServer(req);
         if (io) {
@@ -210,8 +264,19 @@ export async function releaseDealEscrowController(
     next: NextFunction,
 ): Promise<void> {
     try {
+        await assertEscrowEnabledAtLaunch();
         const actor = requireActor(req);
-        const deal = await releaseDealEscrow(actor, Number(req.params.id));
+        const deal = await releaseDealEscrow(actor, Number(req.params.id), requireIdempotencyKey(req));
+
+        await notifyUsers([deal.buyerId, deal.sellerId], {
+            type: 'ESCROW_RELEASED',
+            title: `Escrow released for deal #${deal.id}`,
+            body: `Escrow status is now ${deal.escrow.status}.`,
+            link: '/deals',
+            targetType: 'deal',
+            targetId: deal.id,
+            dedupKey: `escrow-released:${deal.id}`,
+        });
 
         const io = getSocketServer(req);
         if (io) {
@@ -242,8 +307,19 @@ export async function refundDealEscrowController(
     next: NextFunction,
 ): Promise<void> {
     try {
+        await assertEscrowEnabledAtLaunch();
         const actor = requireActor(req);
-        const deal = await refundDealEscrow(actor, Number(req.params.id));
+        const deal = await refundDealEscrow(actor, Number(req.params.id), requireIdempotencyKey(req));
+
+        await notifyUsers([deal.buyerId, deal.sellerId], {
+            type: 'ESCROW_REFUNDED',
+            title: `Escrow refunded for deal #${deal.id}`,
+            body: `Escrow status is now ${deal.escrow.status}.`,
+            link: '/deals',
+            targetType: 'deal',
+            targetId: deal.id,
+            dedupKey: `escrow-refunded:${deal.id}`,
+        });
 
         const io = getSocketServer(req);
         if (io) {
@@ -345,6 +421,16 @@ export async function resolveDealDisputeController(
             req.body as ResolveDisputeBody,
         );
 
+        await notifyUsers([result.deal.buyerId, result.deal.sellerId], {
+            type: 'DISPUTE_RESOLVED',
+            title: `Dispute resolved for deal #${result.deal.id}`,
+            body: `Dispute status is now ${result.dispute.status}.`,
+            link: '/deals',
+            targetType: 'deal',
+            targetId: result.deal.id,
+            dedupKey: `dispute-resolved:${result.deal.id}:${result.dispute.status}`,
+        });
+
         const io = getSocketServer(req);
         if (io) {
             emitPlatformNotification(io, [result.deal.buyerId, result.deal.sellerId], {
@@ -370,8 +456,34 @@ export async function escrowWebhookController(
     next: NextFunction,
 ): Promise<void> {
     try {
+        await assertEscrowEnabledAtLaunch();
         assertEscrowWebhookSecret(req);
         const result = await processEscrowWebhook(req.body as EscrowWebhookBody);
+
+        if (result.deal) {
+            const notificationType =
+                result.eventType === 'escrow.held'
+                    ? 'ESCROW_HELD'
+                    : result.eventType === 'escrow.released'
+                        ? 'ESCROW_RELEASED'
+                        : result.eventType === 'escrow.refunded'
+                            ? 'ESCROW_REFUNDED'
+                            : result.eventType === 'dispute.resolved'
+                                ? 'DISPUTE_RESOLVED'
+                                : null;
+
+            if (notificationType && result.participantIds.length > 0) {
+                await notifyUsers(result.participantIds, {
+                    type: notificationType,
+                    title: `Escrow webhook: ${result.eventType}`,
+                    body: result.message,
+                    link: '/deals',
+                    targetType: 'deal',
+                    targetId: result.deal.id,
+                    dedupKey: `escrow-webhook:${result.eventId}`,
+                });
+            }
+        }
 
         const io = getSocketServer(req);
         if (io && result.participantIds.length > 0) {

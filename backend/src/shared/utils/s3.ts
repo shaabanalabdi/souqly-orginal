@@ -17,6 +17,24 @@ const s3 = new S3Client({
 const BUCKET = process.env.S3_BUCKET || 'souqly-media';
 const CDN_URL = process.env.S3_CDN_URL || '';
 
+function trimTrailingSlash(value: string): string {
+    return value.replace(/\/+$/, '');
+}
+
+function buildOriginBaseUrls(): string[] {
+    const values = new Set<string>();
+
+    if (CDN_URL) {
+        values.add(trimTrailingSlash(CDN_URL));
+    }
+
+    if (process.env.S3_ENDPOINT) {
+        values.add(`${trimTrailingSlash(process.env.S3_ENDPOINT)}/${BUCKET}`);
+    }
+
+    return Array.from(values);
+}
+
 export interface UploadResult {
     key: string;
     url: string;
@@ -43,6 +61,21 @@ export async function uploadToS3(
     const url = CDN_URL ? `${CDN_URL}/${key}` : `${process.env.S3_ENDPOINT}/${BUCKET}/${key}`;
 
     return { key, url };
+}
+
+export function getManagedMediaBaseUrls(): string[] {
+    return buildOriginBaseUrls();
+}
+
+export function isManagedMediaUrl(url: string, folderPrefix?: string): boolean {
+    const normalizedUrl = trimTrailingSlash(url);
+    const baseUrls = buildOriginBaseUrls();
+
+    return baseUrls.some((baseUrl) => {
+        const normalizedBase = trimTrailingSlash(baseUrl);
+        const prefix = folderPrefix ? `${normalizedBase}/${folderPrefix}/` : `${normalizedBase}/`;
+        return normalizedUrl.startsWith(prefix);
+    });
 }
 
 /** Delete an object from S3 by key */

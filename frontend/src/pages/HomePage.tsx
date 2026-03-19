@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { ListingCard } from '../components/ListingCard';
 import { ListingGridSkeleton } from '../components/ListingGridSkeleton';
 import { EmptyState } from '../components/EmptyState';
+import { Button } from '../components/ui';
 import { categoriesService } from '../services/categories.service';
 import { listingsService } from '../services/listings.service';
 import { asHttpError } from '../services/http';
 import type { Category, ListingSummary } from '../types/domain';
 import { marketplaceCategories, marketplaceListings } from './marketplaceMockData';
 import { useLocaleSwitch } from '../utils/localeSwitch';
+import { addRecentlyViewedListingId, getRecentlyViewedListingIds } from '../utils/recentlyViewed';
 
 function normalizeListing(listing: ListingSummary) {
   return {
@@ -32,8 +34,11 @@ export function HomePage() {
   const [apiCategories, setApiCategories] = useState<Category[]>([]);
   const [featuredListings, setFeaturedListings] = useState<ListingSummary[]>([]);
   const [latestListings, setLatestListings] = useState<ListingSummary[]>([]);
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<number[]>([]);
 
   useEffect(() => {
+    setRecentlyViewedIds(getRecentlyViewedListingIds());
+
     const loadData = async () => {
       setLoading(true);
       setErrorMessage('');
@@ -97,6 +102,23 @@ export function HomePage() {
     listing.title.toLowerCase().includes(searchValue.toLowerCase()),
   );
 
+  const recentlyViewedListings = useMemo(() => {
+    if (recentlyViewedIds.length === 0) return [];
+    const byId = new Map(sourceLatest.map((listing) => [Number(listing.id), listing]));
+    return recentlyViewedIds
+      .map((id) => byId.get(id))
+      .filter((listing): listing is (typeof sourceLatest)[number] => Boolean(listing))
+      .slice(0, 6);
+  }, [recentlyViewedIds, sourceLatest]);
+
+  const openListing = (nextId: number | string) => {
+    const parsed = Number(nextId);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      setRecentlyViewedIds(addRecentlyViewedListingId(parsed));
+    }
+    navigate(`/listings/${nextId}`);
+  };
+
   return (
     <div className="space-y-10">
       <section className="rounded-2xl bg-gradient-to-l from-primary to-blue-700 p-6 text-white shadow-soft md:p-10">
@@ -125,12 +147,9 @@ export function HomePage() {
             placeholder={pick('ابحث عن سيارة، شقة، خدمة...', 'Search cars, apartments, services...')}
             className="h-12 w-full rounded-xl border border-white/30 bg-white px-4 text-ink outline-none ring-accent transition focus:ring-2"
           />
-          <button
-            type="submit"
-            className="h-12 rounded-xl bg-accent px-5 text-sm font-bold text-white transition hover:bg-amber-600"
-          >
+          <Button type="submit" className="h-12 bg-accent hover:bg-amber-600" variant="primary">
             {pick('ابدأ البحث', 'Start Search')}
-          </button>
+          </Button>
         </form>
       </section>
 
@@ -138,13 +157,13 @@ export function HomePage() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-ink">{pick('التصنيفات', 'Categories')}</h2>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
           {displayedCategories.map((category) => (
             <button
               key={category.id}
               type="button"
-              onClick={() => navigate(`/search?category=${encodeURIComponent(category.id)}`)}
-              className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-start shadow-soft transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+              onClick={() => navigate(`/categories/${encodeURIComponent(category.id)}`)}
+              className="group flex min-w-[230px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-start shadow-soft transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md sm:min-w-0"
             >
               <span className="inline-flex size-10 items-center justify-center rounded-lg bg-slate-100 text-xl">
                 {category.icon}
@@ -176,7 +195,7 @@ export function HomePage() {
                   badge={listing.badge}
                   isFavorite={favorites.includes(listing.id)}
                   locale={locale}
-                  onOpen={(nextId) => navigate(`/listings/${nextId}`)}
+                  onOpen={openListing}
                   onToggleFavorite={(id, nextState) =>
                     setFavorites((prev) =>
                       nextState ? [...prev, id] : prev.filter((favId) => favId !== id),
@@ -189,8 +208,40 @@ export function HomePage() {
       </section>
 
       <section>
+        {recentlyViewedListings.length > 0 ? (
+          <>
+            <div className="mb-4 mt-8 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-ink">{pick('شاهدت مؤخرًا', 'Recently Viewed')}</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {recentlyViewedListings.map((listing) => (
+                <ListingCard
+                  key={`recent-${listing.id}`}
+                  id={listing.id}
+                  title={listing.title}
+                  price={listing.price}
+                  currency={listing.currency}
+                  location={listing.location}
+                  imageUrl={listing.imageUrl}
+                  badge={listing.badge}
+                  isFavorite={favorites.includes(listing.id)}
+                  locale={locale}
+                  onOpen={openListing}
+                  onToggleFavorite={(id, nextState) =>
+                    setFavorites((prev) =>
+                      nextState ? [...prev, id] : prev.filter((favId) => favId !== id),
+                    )}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+
+      </section>
+
+      <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-ink">{pick('أحدث الإعلانات', 'Latest Listings')}</h2>
+          <h2 className="text-xl font-bold text-ink">{pick('إعلانات مقترحة لك', 'Recommended Listings')}</h2>
         </div>
 
         {loading ? (
@@ -214,7 +265,7 @@ export function HomePage() {
                 badge={listing.badge}
                 isFavorite={favorites.includes(listing.id)}
                 locale={locale}
-                onOpen={(nextId) => navigate(`/listings/${nextId}`)}
+                onOpen={openListing}
                 onToggleFavorite={(id, nextState) =>
                   setFavorites((prev) =>
                     nextState ? [...prev, id] : prev.filter((favId) => favId !== id),

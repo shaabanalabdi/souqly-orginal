@@ -35,6 +35,57 @@ describe('Admin routes', () => {
         expect(response.body.data.reports.pending).toBe(2);
     });
 
+    it('GET /api/v1/admin/config returns default config when no version exists', async () => {
+        const adminToken = signAccessToken({ userId: 1, role: 'ADMIN', trustTier: 'TOP_SELLER' });
+
+        jest.spyOn(prisma.systemConfigVersion, 'findFirst').mockResolvedValue(null);
+
+        const response = await request(app)
+            .get('/api/v1/admin/config')
+            .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.data.version).toBe(0);
+        expect(response.body.data.config).toEqual({});
+    });
+
+    it('PATCH /api/v1/admin/config creates a new config version', async () => {
+        const adminToken = signAccessToken({ userId: 1, role: 'ADMIN', trustTier: 'TOP_SELLER' });
+
+        jest.spyOn(prisma.systemConfigVersion, 'findFirst').mockResolvedValue({
+            id: 2,
+            version: 2,
+            configJson: { maintenanceMode: false },
+            changeNote: 'Previous config',
+            changedById: 1,
+            createdAt: new Date('2026-03-01T00:00:00.000Z'),
+        } as never);
+        jest.spyOn(prisma.systemConfigVersion, 'create').mockResolvedValue({
+            id: 3,
+            version: 3,
+            configJson: { maintenanceMode: true },
+            changeNote: 'Enable maintenance',
+            changedById: 1,
+            createdAt: new Date('2026-03-02T00:00:00.000Z'),
+        } as never);
+
+        const response = await request(app)
+            .patch('/api/v1/admin/config')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({
+                config: {
+                    maintenanceMode: true,
+                },
+                changeNote: 'Enable maintenance',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.data.version).toBe(3);
+        expect(response.body.data.config.maintenanceMode).toBe(true);
+    });
+
     it('GET /api/v1/admin/reports lists reports for moderators', async () => {
         const modToken = signAccessToken({ userId: 2, role: 'MODERATOR', trustTier: 'TRUSTED' });
 
@@ -73,6 +124,49 @@ describe('Admin routes', () => {
         expect(response.body.success).toBe(true);
         expect(response.body.data).toHaveLength(1);
         expect(response.body.data[0].listing.title).toBe('Title');
+    });
+
+    it('GET /api/v1/admin/disputes lists disputes for moderators', async () => {
+        const modToken = signAccessToken({ userId: 2, role: 'MODERATOR', trustTier: 'TRUSTED' });
+
+        jest.spyOn(prisma.disputeCase, 'count').mockResolvedValue(1);
+        jest.spyOn(prisma.disputeCase, 'findMany').mockResolvedValue([
+            {
+                id: 501,
+                dealId: 300,
+                openedByUserId: 41,
+                reason: 'fraud',
+                description: 'Suspicious payment flow',
+                status: 'OPEN',
+                resolvedByAdmin: null,
+                resolution: null,
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                resolvedAt: null,
+                deal: {
+                    id: 300,
+                    status: 'DISPUTED',
+                    finalPrice: 1200,
+                    currency: 'USD',
+                    buyerId: 41,
+                    sellerId: 99,
+                    listingId: 200,
+                    listing: {
+                        titleAr: 'عنوان',
+                        titleEn: 'Title',
+                    },
+                },
+            },
+        ] as never);
+
+        const response = await request(app)
+            .get('/api/v1/admin/disputes?status=OPEN&lang=en')
+            .set('Authorization', `Bearer ${modToken}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.data).toHaveLength(1);
+        expect(response.body.data[0].dealId).toBe(300);
+        expect(response.body.data[0].deal.listingTitle).toBe('Title');
     });
 
     it('GET /api/v1/admin/audit-logs lists audit actions for moderators', async () => {
@@ -498,7 +592,7 @@ describe('Admin routes', () => {
         expect(response.body.error.code).toBe('FORBIDDEN');
     });
 
-    it('PATCH /api/v1/admin/users/:id updates user role for admin', async () => {
+    it('PATCH /api/v1/admin/users/:id updates user staffRole for admin', async () => {
         const adminToken = signAccessToken({ userId: 1, role: 'ADMIN', trustTier: 'TOP_SELLER' });
 
         jest.spyOn(prisma.user, 'findUnique').mockResolvedValue({
@@ -529,8 +623,8 @@ describe('Admin routes', () => {
             .patch('/api/v1/admin/users/41')
             .set('Authorization', `Bearer ${adminToken}`)
             .send({
-                action: 'set_role',
-                role: 'MODERATOR',
+                action: 'set_staff_role',
+                staffRole: 'MODERATOR',
             });
 
         expect(response.status).toBe(200);

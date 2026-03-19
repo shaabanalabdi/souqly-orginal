@@ -1,6 +1,7 @@
 import {
     DealStatus,
     DisputeStatus,
+    EscrowLedgerEntryType,
     EscrowStatus,
     EscrowWebhookEventStatus,
     MessageType,
@@ -13,7 +14,10 @@ import { isModeratorOrAdmin } from '../../shared/auth/authorization.js';
 import type { AppLanguage } from '../../shared/utils/language.js';
 import { buildPaginationMeta, getSkip, parsePagination } from '../../shared/utils/pagination.js';
 import { prisma } from '../../shared/utils/prisma.js';
-import { calculateTrustScoreFromRaw, resolveTrustTier } from '../../shared/utils/trustScore.js';
+import { domainEventBus } from '../../events/domainEvents.js';
+import { createAuditLog } from '../../shared/audit/auditLog.service.js';
+import { sanitizeNullableText, sanitizeText } from '../../shared/utils/sanitize.js';
+import { incrementStoreAnalyticsMetric } from '../businessProfiles/businessAnalytics.service.js';
 import type {
     CreateDisputeBody,
     CreateDealFromOfferBody,
@@ -67,6 +71,14 @@ interface DealSummaryDto extends DealDto {
         coverImage: string | null;
     };
     otherUserId: number;
+}
+
+interface DealDetailsDto extends DealDto {
+    listing: {
+        title: string;
+        coverImage: string | null;
+    };
+    dispute: DisputeCaseDto | null;
 }
 
 interface DealActor {
@@ -208,69 +220,6 @@ function serializeDispute(dispute: {
     };
 }
 
-async function recalculateUserTrust(userId: number): Promise<void> {
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-            id: true,
-            emailVerifiedAt: true,
-            phoneVerifiedAt: true,
-            googleId: true,
-            facebookId: true,
-            createdAt: true,
-            avgResponseHours: true,
-        },
-    });
-
-    if (!user) {
-        return;
-    }
-
-    const [ratingAgg, completedTransactions, disputeCount] = await Promise.all([
-        prisma.review.aggregate({
-            where: { revieweeId: userId },
-            _avg: { rating: true },
-        }),
-        prisma.deal.count({
-            where: {
-                status: DealStatus.COMPLETED,
-                OR: [{ buyerId: userId }, { sellerId: userId }],
-            },
-        }),
-        prisma.disputeCase.count({
-            where: {
-                deal: {
-                    OR: [{ buyerId: userId }, { sellerId: userId }],
-                },
-            },
-        }),
-    ]);
-
-    let verificationPoints = 0;
-    if (user.emailVerifiedAt) verificationPoints += 1;
-    if (user.phoneVerifiedAt) verificationPoints += 1;
-    if (user.googleId) verificationPoints += 1;
-    if (user.facebookId) verificationPoints += 1;
-
-    const accountAgeDays = Math.floor((Date.now() - user.createdAt.getTime()) / (24 * 60 * 60 * 1000));
-    const score = calculateTrustScoreFromRaw({
-        verificationPoints,
-        averageRating: ratingAgg._avg.rating ?? 0,
-        completedTransactions,
-        accountAgeDays,
-        avgResponseHours: user.avgResponseHours,
-        disputesCount: disputeCount,
-    });
-
-    await prisma.user.update({
-        where: { id: userId },
-        data: {
-            trustScore: score,
-            trustTier: resolveTrustTier(score),
-        },
-    });
-}
-
 const dealEscrowSelect = {
     id: true,
     listingId: true,
@@ -402,6 +351,37 @@ function assertModeratorOrAdmin(actor: DealActor): void {
     }
 }
 
+function normalizeIdempotencyKey(idempotencyKey: string | undefined | null, action: string): string {
+    const normalized = idempotencyKey?.trim();
+    if (!normalized) {
+        throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', `${action} requires x-idempotency-key.`);
+    }
+
+    if (normalized.length > 120) {
+        throw new ApiError(400, 'IDEMPOTENCY_KEY_INVALID', 'Idempotency key is too long.');
+    }
+
+    return normalized;
+}
+
+async function returnEscrowIdempotentResult(idempotencyKey: string): Promise<DealDto | null> {
+    const existing = await prisma.escrowLedgerEntry.findUnique({
+        where: { idempotencyKey },
+        select: { dealId: true },
+    });
+
+    if (!existing) {
+        return null;
+    }
+
+    const deal = await prisma.deal.findUnique({
+        where: { id: existing.dealId },
+        select: dealEscrowSelect,
+    });
+
+    return deal ? serializeDeal(deal) : null;
+}
+
 export async function createDealFromOffer(
     userId: number,
     payload: CreateDealFromOfferBody,
@@ -447,7 +427,7 @@ export async function createDealFromOffer(
             buyerId: offer.thread.buyerId,
             sellerId: offer.thread.sellerId,
             status: {
-                in: [DealStatus.PENDING, DealStatus.CONFIRMED, DealStatus.COMPLETED],
+                in: [DealStatus.PENDING, DealStatus.CONFIRMED, DealStatus.COMPLETED, DealStatus.RATED, DealStatus.DISPUTED],
             },
         },
         select: { id: true },
@@ -457,6 +437,10 @@ export async function createDealFromOffer(
         throw new ApiError(409, 'DEAL_ALREADY_EXISTS', 'A deal already exists for this offer.');
     }
 
+    const normalizedMeetingPlace = sanitizeNullableText(payload.meetingPlace);
+    const normalizedCourierName = sanitizeNullableText(payload.courierName);
+    const normalizedTrackingNumber = sanitizeNullableText(payload.trackingNumber);
+
     const deal = await prisma.deal.create({
         data: {
             listingId: offer.listingId,
@@ -465,13 +449,13 @@ export async function createDealFromOffer(
             finalPrice: payload.finalPrice ?? offer.amount,
             quantity: payload.quantity ?? offer.quantity,
             currency: payload.currency ?? offer.listing.currency ?? 'USD',
-            meetingPlace: payload.meetingPlace,
+            meetingPlace: normalizedMeetingPlace,
             meetingLat: payload.meetingLat,
             meetingLng: payload.meetingLng,
             meetingTime: payload.meetingTime,
             deliveryMethod: payload.deliveryMethod,
-            courierName: payload.courierName,
-            trackingNumber: payload.trackingNumber,
+            courierName: normalizedCourierName,
+            trackingNumber: normalizedTrackingNumber,
             status: DealStatus.PENDING,
         },
         select: {
@@ -514,6 +498,15 @@ export async function createDealFromOffer(
         data: { lastMessageAt: new Date() },
     });
 
+    domainEventBus.publish('DEAL_CREATED', {
+        dealId: deal.id,
+        listingId: deal.listingId,
+        buyerId: deal.buyerId,
+        sellerId: deal.sellerId,
+    });
+
+    await incrementStoreAnalyticsMetric(deal.sellerId, 'dealsCreated');
+
     return serializeDeal(deal);
 }
 
@@ -554,7 +547,11 @@ export async function confirmDeal(userId: number, dealId: number): Promise<DealD
         throw new ApiError(403, 'FORBIDDEN', 'You are not allowed to confirm this deal.');
     }
 
-    if (deal.status === DealStatus.CANCELLED || deal.status === DealStatus.DISPUTED) {
+    if (
+        deal.status === DealStatus.CANCELLED
+        || deal.status === DealStatus.DISPUTED
+        || deal.status === DealStatus.RATED
+    ) {
         throw new ApiError(400, 'DEAL_NOT_CONFIRMABLE', 'This deal cannot be confirmed.');
     }
 
@@ -597,7 +594,11 @@ export async function confirmDeal(userId: number, dealId: number): Promise<DealD
     });
 
     if (bothConfirmed) {
-        await Promise.all([recalculateUserTrust(updated.buyerId), recalculateUserTrust(updated.sellerId)]);
+        domainEventBus.publish('DEAL_COMPLETED', {
+            dealId: updated.id,
+            buyerId: updated.buyerId,
+            sellerId: updated.sellerId,
+        });
     }
 
     return serializeDeal(updated);
@@ -607,7 +608,14 @@ export async function holdDealEscrow(
     userId: number,
     dealId: number,
     payload: HoldEscrowBody,
+    idempotencyKey?: string,
 ): Promise<DealDto> {
+    const normalizedKey = normalizeIdempotencyKey(idempotencyKey, 'Hold escrow');
+    const idempotentResult = await returnEscrowIdempotentResult(normalizedKey);
+    if (idempotentResult) {
+        return idempotentResult;
+    }
+
     const deal = await prisma.deal.findUnique({
         where: { id: dealId },
         select: dealEscrowSelect,
@@ -636,24 +644,64 @@ export async function holdDealEscrow(
     const amount = payload.amount ?? deal.finalPrice;
     const currency = payload.currency ?? deal.currency;
 
-    const updated = await prisma.deal.update({
-        where: { id: deal.id },
-        data: {
-            escrowStatus: EscrowStatus.HELD,
-            escrowAmount: amount,
-            escrowCurrency: currency,
-            escrowProviderRef: payload.providerRef ?? null,
-            escrowHeldAt: new Date(),
-            escrowReleasedAt: null,
-            escrowRefundedAt: null,
-        },
-        select: dealEscrowSelect,
-    });
+    try {
+        const updated = await prisma.$transaction(async (tx) => {
+            const nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    escrowStatus: EscrowStatus.HELD,
+                    escrowAmount: amount,
+                    escrowCurrency: currency,
+                    escrowProviderRef: payload.providerRef ?? null,
+                    escrowHeldAt: new Date(),
+                    escrowReleasedAt: null,
+                    escrowRefundedAt: null,
+                },
+                select: dealEscrowSelect,
+            });
 
-    return serializeDeal(updated);
+            await tx.escrowLedgerEntry.create({
+                data: {
+                    dealId: deal.id,
+                    actorUserId: userId,
+                    entryType: EscrowLedgerEntryType.HOLD,
+                    amount,
+                    currency,
+                    providerRef: payload.providerRef ?? null,
+                    idempotencyKey: normalizedKey,
+                    metadata: {
+                        source: 'api',
+                        previousEscrowStatus: deal.escrowStatus,
+                    } as Prisma.InputJsonValue,
+                },
+            });
+
+            return nextDeal;
+        });
+
+        return serializeDeal(updated);
+    } catch (error) {
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError
+            && error.code === 'P2002'
+        ) {
+            const duplicateResult = await returnEscrowIdempotentResult(normalizedKey);
+            if (duplicateResult) {
+                return duplicateResult;
+            }
+        }
+
+        throw error;
+    }
 }
 
-export async function releaseDealEscrow(actor: DealActor, dealId: number): Promise<DealDto> {
+export async function releaseDealEscrow(actor: DealActor, dealId: number, idempotencyKey?: string): Promise<DealDto> {
+    const normalizedKey = normalizeIdempotencyKey(idempotencyKey, 'Release escrow');
+    const idempotentResult = await returnEscrowIdempotentResult(normalizedKey);
+    if (idempotentResult) {
+        return idempotentResult;
+    }
+
     const deal = await prisma.deal.findUnique({
         where: { id: dealId },
         select: dealEscrowSelect,
@@ -677,19 +725,71 @@ export async function releaseDealEscrow(actor: DealActor, dealId: number): Promi
         throw new ApiError(400, 'DEAL_NOT_ESCROWABLE', 'This deal cannot release escrow in its current status.');
     }
 
-    const updated = await prisma.deal.update({
-        where: { id: deal.id },
-        data: {
-            escrowStatus: EscrowStatus.RELEASED,
-            escrowReleasedAt: new Date(),
-        },
-        select: dealEscrowSelect,
-    });
+    try {
+        const updated = await prisma.$transaction(async (tx) => {
+            const nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    escrowStatus: EscrowStatus.RELEASED,
+                    escrowReleasedAt: new Date(),
+                },
+                select: dealEscrowSelect,
+            });
 
-    return serializeDeal(updated);
+            await tx.escrowLedgerEntry.create({
+                data: {
+                    dealId: deal.id,
+                    actorUserId: actor.userId,
+                    entryType: EscrowLedgerEntryType.RELEASE,
+                    amount: deal.escrowAmount ?? deal.finalPrice,
+                    currency: deal.escrowCurrency ?? deal.currency,
+                    providerRef: deal.escrowProviderRef,
+                    idempotencyKey: normalizedKey,
+                    metadata: {
+                        source: 'api',
+                        previousEscrowStatus: deal.escrowStatus,
+                        privileged: isPrivileged,
+                    } as Prisma.InputJsonValue,
+                },
+            });
+
+            if (isPrivileged) {
+                await createAuditLog({
+                    adminId: actor.userId,
+                    action: 'ESCROW_RELEASE',
+                    entityType: 'deal',
+                    entityId: deal.id,
+                    oldData: { escrowStatus: deal.escrowStatus } as Prisma.InputJsonObject,
+                    newData: { escrowStatus: EscrowStatus.RELEASED } as Prisma.InputJsonObject,
+                }, tx);
+            }
+
+            return nextDeal;
+        });
+
+        return serializeDeal(updated);
+    } catch (error) {
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError
+            && error.code === 'P2002'
+        ) {
+            const duplicateResult = await returnEscrowIdempotentResult(normalizedKey);
+            if (duplicateResult) {
+                return duplicateResult;
+            }
+        }
+
+        throw error;
+    }
 }
 
-export async function refundDealEscrow(actor: DealActor, dealId: number): Promise<DealDto> {
+export async function refundDealEscrow(actor: DealActor, dealId: number, idempotencyKey?: string): Promise<DealDto> {
+    const normalizedKey = normalizeIdempotencyKey(idempotencyKey, 'Refund escrow');
+    const idempotentResult = await returnEscrowIdempotentResult(normalizedKey);
+    if (idempotentResult) {
+        return idempotentResult;
+    }
+
     const isPrivileged = isModeratorOrAdmin(actor);
     if (!isPrivileged) {
         throw new ApiError(403, 'ESCROW_REFUND_FORBIDDEN', 'Only moderators and admins can refund escrow.');
@@ -710,18 +810,65 @@ export async function refundDealEscrow(actor: DealActor, dealId: number): Promis
 
     const shouldCancelDeal = deal.status !== DealStatus.COMPLETED;
 
-    const updated = await prisma.deal.update({
-        where: { id: deal.id },
-        data: {
-            escrowStatus: EscrowStatus.REFUNDED,
-            escrowRefundedAt: new Date(),
-            status: shouldCancelDeal ? DealStatus.CANCELLED : deal.status,
-            completedAt: shouldCancelDeal ? null : deal.completedAt,
-        },
-        select: dealEscrowSelect,
-    });
+    try {
+        const updated = await prisma.$transaction(async (tx) => {
+            const nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    escrowStatus: EscrowStatus.REFUNDED,
+                    escrowRefundedAt: new Date(),
+                    status: shouldCancelDeal ? DealStatus.CANCELLED : deal.status,
+                    completedAt: shouldCancelDeal ? null : deal.completedAt,
+                },
+                select: dealEscrowSelect,
+            });
 
-    return serializeDeal(updated);
+            await tx.escrowLedgerEntry.create({
+                data: {
+                    dealId: deal.id,
+                    actorUserId: actor.userId,
+                    entryType: EscrowLedgerEntryType.REFUND,
+                    amount: deal.escrowAmount ?? deal.finalPrice,
+                    currency: deal.escrowCurrency ?? deal.currency,
+                    providerRef: deal.escrowProviderRef,
+                    idempotencyKey: normalizedKey,
+                    metadata: {
+                        source: 'api',
+                        previousEscrowStatus: deal.escrowStatus,
+                        cancelledDeal: shouldCancelDeal,
+                    } as Prisma.InputJsonValue,
+                },
+            });
+
+            await createAuditLog({
+                adminId: actor.userId,
+                action: 'ESCROW_REFUND',
+                entityType: 'deal',
+                entityId: deal.id,
+                oldData: { escrowStatus: deal.escrowStatus, dealStatus: deal.status } as Prisma.InputJsonObject,
+                newData: {
+                    escrowStatus: EscrowStatus.REFUNDED,
+                    dealStatus: shouldCancelDeal ? DealStatus.CANCELLED : deal.status,
+                } as Prisma.InputJsonObject,
+            }, tx);
+
+            return nextDeal;
+        });
+
+        return serializeDeal(updated);
+    } catch (error) {
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError
+            && error.code === 'P2002'
+        ) {
+            const duplicateResult = await returnEscrowIdempotentResult(normalizedKey);
+            if (duplicateResult) {
+                return duplicateResult;
+            }
+        }
+
+        throw error;
+    }
 }
 
 export async function openDealDispute(
@@ -750,13 +897,16 @@ export async function openDealDispute(
         throw new ApiError(409, 'DISPUTE_ALREADY_OPEN', 'This deal already has an active dispute.');
     }
 
+    const normalizedReason = sanitizeText(payload.reason);
+    const normalizedDescription = sanitizeText(payload.description);
+
     const dispute = deal.dispute
         ? await prisma.disputeCase.update({
               where: { dealId: deal.id },
               data: {
                   openedByUserId: userId,
-                  reason: payload.reason,
-                  description: payload.description,
+                  reason: normalizedReason,
+                  description: normalizedDescription,
                   status: DisputeStatus.OPEN,
                   resolvedByAdmin: null,
                   resolution: null,
@@ -768,8 +918,8 @@ export async function openDealDispute(
               data: {
                   dealId: deal.id,
                   openedByUserId: userId,
-                  reason: payload.reason,
-                  description: payload.description,
+                  reason: normalizedReason,
+                  description: normalizedDescription,
                   status: DisputeStatus.OPEN,
               },
               select: disputeCaseSelect,
@@ -786,6 +936,12 @@ export async function openDealDispute(
                   },
                   select: dealEscrowSelect,
               });
+
+    domainEventBus.publish('DISPUTE_OPENED', {
+        dealId: updatedDeal.id,
+        participantUserIds: [updatedDeal.buyerId, updatedDeal.sellerId],
+        openedByUserId: userId,
+    });
 
     return {
         deal: serializeDeal(updatedDeal),
@@ -813,30 +969,56 @@ export async function reviewDealDispute(
         throw new ApiError(404, 'DISPUTE_NOT_FOUND', 'No dispute found for this deal.');
     }
 
-    if (deal.dispute.status === DisputeStatus.RESOLVED) {
+    const existingDispute = deal.dispute;
+
+    if (existingDispute.status === DisputeStatus.RESOLVED) {
         throw new ApiError(409, 'DISPUTE_ALREADY_RESOLVED', 'Dispute is already resolved.');
     }
 
-    const dispute = await prisma.disputeCase.update({
-        where: { dealId: deal.id },
-        data: {
-            status: DisputeStatus.UNDER_REVIEW,
-            resolution: payload.note ?? deal.dispute.resolution ?? null,
-        },
-        select: disputeCaseSelect,
-    });
+    const disputeNote = sanitizeNullableText(payload.note);
 
-    const updatedDeal =
-        deal.status === DealStatus.DISPUTED
-            ? deal
-            : await prisma.deal.update({
-                  where: { id: deal.id },
-                  data: {
-                      status: DealStatus.DISPUTED,
-                      completedAt: null,
-                  },
-                  select: dealEscrowSelect,
-              });
+    const { dispute, updatedDeal } = await prisma.$transaction(async (tx) => {
+        const nextDispute = await tx.disputeCase.update({
+            where: { dealId: deal.id },
+            data: {
+                status: DisputeStatus.UNDER_REVIEW,
+                resolution: disputeNote ?? existingDispute.resolution ?? null,
+            },
+            select: disputeCaseSelect,
+        });
+
+        const nextDeal =
+            deal.status === DealStatus.DISPUTED
+                ? deal
+                : await tx.deal.update({
+                      where: { id: deal.id },
+                      data: {
+                          status: DealStatus.DISPUTED,
+                          completedAt: null,
+                      },
+                      select: dealEscrowSelect,
+                  });
+
+        await createAuditLog({
+            adminId: actor.userId,
+            action: 'DISPUTE_REVIEW',
+            entityType: 'deal',
+            entityId: deal.id,
+            oldData: {
+                disputeStatus: existingDispute.status,
+                dealStatus: deal.status,
+            } as Prisma.InputJsonObject,
+            newData: {
+                disputeStatus: DisputeStatus.UNDER_REVIEW,
+                note: disputeNote,
+            } as Prisma.InputJsonObject,
+        }, tx);
+
+        return {
+            dispute: nextDispute,
+            updatedDeal: nextDeal,
+        };
+    });
 
     return {
         deal: serializeDeal(updatedDeal),
@@ -876,60 +1058,90 @@ export async function resolveDealDispute(
         throw new ApiError(404, 'DISPUTE_NOT_FOUND', 'No dispute found for this deal.');
     }
 
-    if (deal.dispute.status === DisputeStatus.RESOLVED) {
+    const existingDispute = deal.dispute;
+
+    if (existingDispute.status === DisputeStatus.RESOLVED) {
         throw new ApiError(409, 'DISPUTE_ALREADY_RESOLVED', 'Dispute is already resolved.');
     }
 
-    let updatedDeal: DealEscrowRecord | DealEscrowWithDisputeRecord = deal;
-    if (payload.action === 'release_escrow') {
-        if (deal.escrowStatus !== EscrowStatus.HELD) {
-            throw new ApiError(400, 'ESCROW_NOT_HELD', 'Escrow must be held before release.');
+    const normalizedResolution = sanitizeNullableText(payload.resolution);
+
+    const { updatedDeal, dispute } = await prisma.$transaction(async (tx) => {
+        let nextDeal: DealEscrowRecord | DealEscrowWithDisputeRecord = deal;
+        if (payload.action === 'release_escrow') {
+            if (deal.escrowStatus !== EscrowStatus.HELD) {
+                throw new ApiError(400, 'ESCROW_NOT_HELD', 'Escrow must be held before release.');
+            }
+
+            nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    escrowStatus: EscrowStatus.RELEASED,
+                    escrowReleasedAt: new Date(),
+                    status: deal.status === DealStatus.DISPUTED ? DealStatus.CONFIRMED : deal.status,
+                },
+                select: dealEscrowSelect,
+            });
+        } else if (payload.action === 'refund_escrow') {
+            if (deal.escrowStatus !== EscrowStatus.HELD) {
+                throw new ApiError(400, 'ESCROW_NOT_HELD', 'Escrow must be held before refund.');
+            }
+
+            const shouldCancelDeal = deal.status !== DealStatus.COMPLETED;
+            nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    escrowStatus: EscrowStatus.REFUNDED,
+                    escrowRefundedAt: new Date(),
+                    status: shouldCancelDeal ? DealStatus.CANCELLED : deal.status,
+                    completedAt: shouldCancelDeal ? null : deal.completedAt,
+                },
+                select: dealEscrowSelect,
+            });
+        } else if (deal.status === DealStatus.DISPUTED) {
+            nextDeal = await tx.deal.update({
+                where: { id: deal.id },
+                data: {
+                    status: DealStatus.CONFIRMED,
+                },
+                select: dealEscrowSelect,
+            });
         }
 
-        updatedDeal = await prisma.deal.update({
-            where: { id: deal.id },
+        const nextDispute = await tx.disputeCase.update({
+            where: { dealId: deal.id },
             data: {
-                escrowStatus: EscrowStatus.RELEASED,
-                escrowReleasedAt: new Date(),
-                status: deal.status === DealStatus.DISPUTED ? DealStatus.CONFIRMED : deal.status,
+                status: DisputeStatus.RESOLVED,
+                resolvedByAdmin: actor.userId,
+                resolution: normalizedResolution ?? resolveDisputeMessage(payload),
+                resolvedAt: new Date(),
             },
-            select: dealEscrowSelect,
+            select: disputeCaseSelect,
         });
-    } else if (payload.action === 'refund_escrow') {
-        if (deal.escrowStatus !== EscrowStatus.HELD) {
-            throw new ApiError(400, 'ESCROW_NOT_HELD', 'Escrow must be held before refund.');
-        }
 
-        const shouldCancelDeal = deal.status !== DealStatus.COMPLETED;
-        updatedDeal = await prisma.deal.update({
-            where: { id: deal.id },
-            data: {
-                escrowStatus: EscrowStatus.REFUNDED,
-                escrowRefundedAt: new Date(),
-                status: shouldCancelDeal ? DealStatus.CANCELLED : deal.status,
-                completedAt: shouldCancelDeal ? null : deal.completedAt,
-            },
-            select: dealEscrowSelect,
-        });
-    } else if (deal.status === DealStatus.DISPUTED) {
-        updatedDeal = await prisma.deal.update({
-            where: { id: deal.id },
-            data: {
-                status: DealStatus.CONFIRMED,
-            },
-            select: dealEscrowSelect,
-        });
-    }
+        await createAuditLog({
+            adminId: actor.userId,
+            action: 'DISPUTE_RESOLVE',
+            entityType: 'deal',
+            entityId: deal.id,
+            oldData: {
+                disputeStatus: existingDispute.status,
+                escrowStatus: deal.escrowStatus,
+                dealStatus: deal.status,
+            } as Prisma.InputJsonObject,
+            newData: {
+                disputeStatus: DisputeStatus.RESOLVED,
+                escrowStatus: nextDeal.escrowStatus,
+                dealStatus: nextDeal.status,
+                action: payload.action,
+                resolution: normalizedResolution ?? resolveDisputeMessage(payload),
+            } as Prisma.InputJsonObject,
+        }, tx);
 
-    const dispute = await prisma.disputeCase.update({
-        where: { dealId: deal.id },
-        data: {
-            status: DisputeStatus.RESOLVED,
-            resolvedByAdmin: actor.userId,
-            resolution: payload.resolution ?? resolveDisputeMessage(payload),
-            resolvedAt: new Date(),
-        },
-        select: disputeCaseSelect,
+        return {
+            updatedDeal: nextDeal,
+            dispute: nextDispute,
+        };
     });
 
     return {
@@ -1005,6 +1217,21 @@ export async function processEscrowWebhook(payload: EscrowWebhookBody): Promise<
                     },
                     select: dealEscrowSelect,
                 });
+                await prisma.escrowLedgerEntry.create({
+                    data: {
+                        dealId: deal.id,
+                        actorUserId: null,
+                        entryType: EscrowLedgerEntryType.HOLD,
+                        amount: nextAmount,
+                        currency: nextCurrency,
+                        providerRef: payload.providerRef ?? deal.escrowProviderRef,
+                        idempotencyKey: `${payload.eventId}:hold`,
+                        metadata: {
+                            source: 'webhook',
+                            eventType: payload.eventType,
+                        } as Prisma.InputJsonValue,
+                    },
+                });
                 message = 'Escrow marked as held from provider webhook.';
             }
         } else if (payload.eventType === 'escrow.released') {
@@ -1018,6 +1245,21 @@ export async function processEscrowWebhook(payload: EscrowWebhookBody): Promise<
                         status: deal.status === DealStatus.DISPUTED ? DealStatus.CONFIRMED : deal.status,
                     },
                     select: dealEscrowSelect,
+                });
+                await prisma.escrowLedgerEntry.create({
+                    data: {
+                        dealId: deal.id,
+                        actorUserId: null,
+                        entryType: EscrowLedgerEntryType.RELEASE,
+                        amount: deal.escrowAmount ?? deal.finalPrice,
+                        currency: deal.escrowCurrency ?? deal.currency,
+                        providerRef: payload.providerRef ?? deal.escrowProviderRef,
+                        idempotencyKey: `${payload.eventId}:release`,
+                        metadata: {
+                            source: 'webhook',
+                            eventType: payload.eventType,
+                        } as Prisma.InputJsonValue,
+                    },
                 });
                 message = 'Escrow marked as released from provider webhook.';
             }
@@ -1034,6 +1276,21 @@ export async function processEscrowWebhook(payload: EscrowWebhookBody): Promise<
                         completedAt: shouldCancelDeal ? null : deal.completedAt,
                     },
                     select: dealEscrowSelect,
+                });
+                await prisma.escrowLedgerEntry.create({
+                    data: {
+                        dealId: deal.id,
+                        actorUserId: null,
+                        entryType: EscrowLedgerEntryType.REFUND,
+                        amount: deal.escrowAmount ?? deal.finalPrice,
+                        currency: deal.escrowCurrency ?? deal.currency,
+                        providerRef: payload.providerRef ?? deal.escrowProviderRef,
+                        idempotencyKey: `${payload.eventId}:refund`,
+                        metadata: {
+                            source: 'webhook',
+                            eventType: payload.eventType,
+                        } as Prisma.InputJsonValue,
+                    },
                 });
                 message = 'Escrow marked as refunded from provider webhook.';
             }
@@ -1092,6 +1349,22 @@ export async function processEscrowWebhook(payload: EscrowWebhookBody): Promise<
                     },
                     select: dealEscrowSelect,
                 });
+                await prisma.escrowLedgerEntry.create({
+                    data: {
+                        dealId: deal.id,
+                        actorUserId: null,
+                        entryType: EscrowLedgerEntryType.RELEASE,
+                        amount: deal.escrowAmount ?? deal.finalPrice,
+                        currency: deal.escrowCurrency ?? deal.currency,
+                        providerRef: payload.providerRef ?? deal.escrowProviderRef,
+                        idempotencyKey: `${payload.eventId}:release`,
+                        metadata: {
+                            source: 'webhook',
+                            eventType: payload.eventType,
+                            resolutionAction: payload.resolutionAction,
+                        } as Prisma.InputJsonValue,
+                    },
+                });
             } else if (payload.resolutionAction === 'refund_escrow' && deal.escrowStatus === EscrowStatus.HELD) {
                 const shouldCancelDeal = deal.status !== DealStatus.COMPLETED;
                 updatedDeal = await prisma.deal.update({
@@ -1103,6 +1376,22 @@ export async function processEscrowWebhook(payload: EscrowWebhookBody): Promise<
                         completedAt: shouldCancelDeal ? null : deal.completedAt,
                     },
                     select: dealEscrowSelect,
+                });
+                await prisma.escrowLedgerEntry.create({
+                    data: {
+                        dealId: deal.id,
+                        actorUserId: null,
+                        entryType: EscrowLedgerEntryType.REFUND,
+                        amount: deal.escrowAmount ?? deal.finalPrice,
+                        currency: deal.escrowCurrency ?? deal.currency,
+                        providerRef: payload.providerRef ?? deal.escrowProviderRef,
+                        idempotencyKey: `${payload.eventId}:refund`,
+                        metadata: {
+                            source: 'webhook',
+                            eventType: payload.eventType,
+                            resolutionAction: payload.resolutionAction,
+                        } as Prisma.InputJsonValue,
+                    },
                 });
             } else if (payload.resolutionAction === 'close_no_escrow' && deal.status === DealStatus.DISPUTED) {
                 updatedDeal = await prisma.deal.update({
@@ -1246,6 +1535,52 @@ export async function listMyDeals(
     };
 }
 
+export async function getDealById(
+    actor: DealActor,
+    dealId: number,
+    lang: AppLanguage,
+): Promise<DealDetailsDto> {
+    const deal = await prisma.deal.findUnique({
+        where: { id: dealId },
+        select: {
+            ...dealEscrowWithDisputeSelect,
+            listing: {
+                select: {
+                    titleAr: true,
+                    titleEn: true,
+                    images: {
+                        select: {
+                            urlThumb: true,
+                        },
+                        orderBy: {
+                            sortOrder: 'asc',
+                        },
+                        take: 1,
+                    },
+                },
+            },
+        },
+    });
+
+    if (!deal) {
+        throw new ApiError(404, 'DEAL_NOT_FOUND', 'Deal not found.');
+    }
+
+    const isParticipant = deal.buyerId === actor.userId || deal.sellerId === actor.userId;
+    if (!isParticipant && !isModeratorOrAdmin(actor)) {
+        throw new ApiError(403, 'FORBIDDEN', 'You are not allowed to access this deal.');
+    }
+
+    return {
+        ...serializeDeal(deal),
+        listing: {
+            title: localizeListingTitle(deal.listing, lang),
+            coverImage: deal.listing.images[0]?.urlThumb ?? null,
+        },
+        dispute: deal.dispute ? serializeDispute(deal.dispute) : null,
+    };
+}
+
 export async function createDealReview(
     userId: number,
     dealId: number,
@@ -1269,7 +1604,7 @@ export async function createDealReview(
         throw new ApiError(403, 'FORBIDDEN', 'You are not allowed to review this deal.');
     }
 
-    if (deal.status !== DealStatus.COMPLETED) {
+    if (deal.status !== DealStatus.COMPLETED && deal.status !== DealStatus.RATED) {
         throw new ApiError(400, 'DEAL_NOT_COMPLETED', 'Deal must be completed before reviewing.');
     }
 
@@ -1288,25 +1623,43 @@ export async function createDealReview(
     }
 
     const revieweeId = deal.buyerId === userId ? deal.sellerId : deal.buyerId;
-    const review = await prisma.review.create({
-        data: {
-            dealId,
-            reviewerId: userId,
-            revieweeId,
-            rating: payload.rating,
-            comment: payload.comment,
-        },
-        select: {
-            id: true,
-            dealId: true,
-            reviewerId: true,
-            revieweeId: true,
-            rating: true,
-            comment: true,
-            createdAt: true,
-        },
+    const review = await prisma.$transaction(async (tx) => {
+        const createdReview = await tx.review.create({
+            data: {
+                dealId,
+                reviewerId: userId,
+                revieweeId,
+                rating: payload.rating,
+                comment: sanitizeNullableText(payload.comment),
+            },
+            select: {
+                id: true,
+                dealId: true,
+                reviewerId: true,
+                revieweeId: true,
+                rating: true,
+                comment: true,
+                createdAt: true,
+            },
+        });
+
+        if (deal.status === DealStatus.COMPLETED) {
+            await tx.deal.update({
+                where: { id: dealId },
+                data: {
+                    status: DealStatus.RATED,
+                },
+            });
+        }
+
+        return createdReview;
     });
 
-    await recalculateUserTrust(revieweeId);
+    domainEventBus.publish('REVIEW_RECEIVED', {
+        reviewId: review.id,
+        dealId,
+        revieweeId,
+        rating: review.rating,
+    });
     return serializeReview(review);
 }

@@ -11,6 +11,7 @@ import {
     confirmDealController,
     createDealFromOfferController,
     createDealReviewController,
+    getDealByIdController,
     listMyDealsController,
 } from './deal.controller.js';
 import {
@@ -29,6 +30,7 @@ const dealRoutes = Router();
 dealRoutes.use(authenticate);
 
 dealRoutes.get('/deals/my', validate({ query: paginationQuerySchema }), listMyDealsController);
+dealRoutes.get('/deals/:id', validate({ params: dealIdParamsSchema }), getDealByIdController);
 dealRoutes.post('/deals/from-offer', validate({ body: createDealFromOfferBodySchema }), createDealFromOfferController);
 dealRoutes.patch('/deals/:id/confirm', validate({ params: dealIdParamsSchema }), confirmDealController);
 dealRoutes.patch(

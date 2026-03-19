@@ -29,3 +29,21 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
         });
     }
 }
+
+export function authenticateOptional(req: Request, _res: Response, next: NextFunction): void {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+    if (!token) {
+        next();
+        return;
+    }
+
+    try {
+        req.user = verifyAccessToken(token);
+    } catch {
+        req.user = undefined;
+    }
+
+    next();
+}

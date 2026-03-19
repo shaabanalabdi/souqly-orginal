@@ -1,12 +1,24 @@
-import { ListingStatus, MessageType, OfferStatus, type Prisma } from '@prisma/client';
+import {
+    ContactRequestStatus,
+    ContactVisibility,
+    ListingStatus,
+    MessageType,
+    OfferStatus,
+    type Prisma,
+} from '@prisma/client';
 import { ApiError } from '../../shared/middleware/errorHandler.js';
 import type { AppLanguage } from '../../shared/utils/language.js';
 import { buildPaginationMeta, getSkip, parsePagination } from '../../shared/utils/pagination.js';
 import { prisma } from '../../shared/utils/prisma.js';
+import { domainEventBus } from '../../events/domainEvents.js';
+import { incrementStoreAnalyticsMetric } from '../businessProfiles/businessAnalytics.service.js';
+import { createCraftsmanLead } from '../craftsmanProfiles/craftsmanLead.service.js';
 
 interface ThreadSummaryDto {
     id: number;
     listingId: number;
+    buyerId: number;
+    sellerId: number;
     otherUserId: number;
     unreadCount: number;
     lastMessageAt: string | null;
@@ -50,6 +62,29 @@ interface OfferDto {
     counterAmount: number | null;
     createdAt: string;
     respondedAt: string | null;
+}
+
+interface OfferListItemDto extends OfferDto {
+    otherUserId: number;
+    listing: {
+        id: number;
+        title: string;
+        coverImage: string | null;
+        priceAmount: number | null;
+        currency: string | null;
+    };
+}
+
+interface ContactRequestStateDto {
+    threadId: number;
+    status: 'NONE' | ContactRequestStatus;
+    requesterUserId: number | null;
+    sellerUserId: number | null;
+    phoneApproved: boolean;
+    whatsappApproved: boolean;
+    requestedMessage: string | null;
+    respondedAt: string | null;
+    createdAt: string | null;
 }
 
 function localizeListingTitle(
@@ -121,6 +156,48 @@ function serializeMessage(message: {
         readAt: message.readAt?.toISOString() ?? null,
         createdAt: message.createdAt.toISOString(),
     };
+}
+
+function serializeContactRequestState(request: {
+    threadId: number;
+    status: ContactRequestStatus;
+    requesterUserId: number;
+    sellerUserId: number;
+    phoneApproved: boolean;
+    whatsappApproved: boolean;
+    requestedMessage: string | null;
+    respondedAt: Date | null;
+    createdAt: Date;
+} | null, threadId: number): ContactRequestStateDto {
+    if (!request) {
+        return {
+            threadId,
+            status: 'NONE',
+            requesterUserId: null,
+            sellerUserId: null,
+            phoneApproved: false,
+            whatsappApproved: false,
+            requestedMessage: null,
+            respondedAt: null,
+            createdAt: null,
+        };
+    }
+
+    return {
+        threadId,
+        status: request.status,
+        requesterUserId: request.requesterUserId,
+        sellerUserId: request.sellerUserId,
+        phoneApproved: request.phoneApproved,
+        whatsappApproved: request.whatsappApproved,
+        requestedMessage: request.requestedMessage,
+        respondedAt: request.respondedAt?.toISOString() ?? null,
+        createdAt: request.createdAt.toISOString(),
+    };
+}
+
+function hasApprovalGatedContact(visibility: ContactVisibility): boolean {
+    return visibility === ContactVisibility.APPROVAL;
 }
 
 function serializeOffer(offer: {
@@ -259,11 +336,24 @@ export async function createOrGetThread(
               },
           });
 
+    if (!existingThread) {
+        await Promise.all([
+            incrementStoreAnalyticsMetric(listing.userId, 'chatStarts'),
+            createCraftsmanLead(listing.userId, {
+                fromUserId: userId,
+                source: 'chat',
+                message: `Chat thread started from listing #${listingId}.`,
+            }),
+        ]);
+    }
+
     return {
         created: !existingThread,
         thread: {
             id: thread.id,
             listingId: thread.listingId,
+            buyerId: thread.buyerId,
+            sellerId: thread.sellerId,
             otherUserId: thread.sellerId,
             unreadCount: thread._count.messages,
             lastMessageAt: thread.lastMessageAt?.toISOString() ?? null,
@@ -354,6 +444,8 @@ export async function listMyThreads(
         items: threads.map((thread) => ({
             id: thread.id,
             listingId: thread.listingId,
+            buyerId: thread.buyerId,
+            sellerId: thread.sellerId,
             otherUserId: thread.buyerId === userId ? thread.sellerId : thread.buyerId,
             unreadCount: thread._count.messages,
             lastMessageAt: thread.lastMessageAt?.toISOString() ?? null,
@@ -373,6 +465,81 @@ export async function listMyThreads(
                       createdAt: thread.messages[0].createdAt.toISOString(),
                   }
                 : null,
+        })),
+        meta: buildPaginationMeta(total, pagination),
+    };
+}
+
+export async function listMyOffers(
+    userId: number,
+    query: Record<string, unknown>,
+    lang: AppLanguage,
+): Promise<{ items: OfferListItemDto[]; meta: ReturnType<typeof buildPaginationMeta> }> {
+    const pagination = parsePagination(query);
+    const where: Prisma.OfferWhereInput = {
+        thread: {
+            OR: [{ buyerId: userId }, { sellerId: userId }],
+        },
+    };
+
+    if (typeof query.status === 'string') {
+        where.status = query.status as OfferStatus;
+    }
+
+    const [total, offers] = await Promise.all([
+        prisma.offer.count({ where }),
+        prisma.offer.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip: getSkip(pagination),
+            take: pagination.limit,
+            select: {
+                id: true,
+                threadId: true,
+                listingId: true,
+                senderId: true,
+                amount: true,
+                quantity: true,
+                message: true,
+                status: true,
+                counterAmount: true,
+                createdAt: true,
+                respondedAt: true,
+                thread: {
+                    select: {
+                        buyerId: true,
+                        sellerId: true,
+                    },
+                },
+                listing: {
+                    select: {
+                        id: true,
+                        titleAr: true,
+                        titleEn: true,
+                        priceAmount: true,
+                        currency: true,
+                        images: {
+                            select: { urlThumb: true },
+                            orderBy: { sortOrder: 'asc' },
+                            take: 1,
+                        },
+                    },
+                },
+            },
+        }),
+    ]);
+
+    return {
+        items: offers.map((offer) => ({
+            ...serializeOffer(offer),
+            otherUserId: offer.thread.buyerId === userId ? offer.thread.sellerId : offer.thread.buyerId,
+            listing: {
+                id: offer.listing.id,
+                title: localizeListingTitle(offer.listing, lang),
+                coverImage: offer.listing.images[0]?.urlThumb ?? null,
+                priceAmount: offer.listing.priceAmount,
+                currency: offer.listing.currency,
+            },
         })),
         meta: buildPaginationMeta(total, pagination),
     };
@@ -446,7 +613,7 @@ export async function sendThreadMessage(
     threadId: number,
     payload: { type: 'TEXT' | 'IMAGE'; content?: string; imageUrl?: string },
 ): Promise<ChatMessageDto> {
-    await ensureThreadParticipant(threadId, userId);
+    const thread = await ensureThreadParticipant(threadId, userId);
 
     const message = await prisma.chatMessage.create({
         data: {
@@ -474,6 +641,14 @@ export async function sendThreadMessage(
         data: { lastMessageAt: message.createdAt },
     });
 
+    domainEventBus.publish('MESSAGE_SENT', {
+        threadId,
+        senderId: userId,
+        recipientUserIds: [thread.buyerId, thread.sellerId].filter((participantId) => participantId !== userId),
+        preview: payload.type === 'IMAGE' ? 'Sent an image' : (payload.content ?? '').slice(0, 140),
+        messageKind: payload.type,
+    });
+
     return serializeMessage(message);
 }
 
@@ -482,38 +657,265 @@ export async function requestPhoneInThread(
     threadId: number,
     payload: { message?: string },
 ): Promise<ChatMessageDto> {
-    const thread = await ensureThreadParticipant(threadId, userId);
+    const thread = await prisma.chatThread.findUnique({
+        where: { id: threadId },
+        select: {
+            id: true,
+            listingId: true,
+            buyerId: true,
+            sellerId: true,
+            listing: {
+                select: {
+                    phoneVisibility: true,
+                    whatsappVisibility: true,
+                },
+            },
+        },
+    });
+
+    if (!thread) {
+        throw new ApiError(404, 'THREAD_NOT_FOUND', 'Thread not found.');
+    }
+
+    if (thread.buyerId !== userId && thread.sellerId !== userId) {
+        throw new ApiError(403, 'FORBIDDEN', 'You are not allowed to access this thread.');
+    }
 
     if (thread.buyerId !== userId) {
         throw new ApiError(403, 'ONLY_BUYER_CAN_REQUEST_PHONE', 'Only the buyer can request phone access.');
     }
 
-    const message = await prisma.chatMessage.create({
-        data: {
-            threadId,
-            senderId: userId,
-            type: MessageType.PHONE_REQUEST,
-            content: payload.message ?? 'Phone number request',
-        },
+    if (
+        !hasApprovalGatedContact(thread.listing.phoneVisibility)
+        && !hasApprovalGatedContact(thread.listing.whatsappVisibility)
+    ) {
+        throw new ApiError(
+            409,
+            'PHONE_REQUEST_NOT_REQUIRED',
+            'This listing does not require approval before showing contact details.',
+        );
+    }
+
+    const existingRequest = await prisma.contactAccessRequest.findUnique({
+        where: { threadId },
         select: {
-            id: true,
+            status: true,
+        },
+    });
+
+    if (existingRequest?.status === ContactRequestStatus.PENDING) {
+        throw new ApiError(409, 'PHONE_REQUEST_ALREADY_PENDING', 'A phone request is already pending for this chat.');
+    }
+
+    if (existingRequest?.status === ContactRequestStatus.APPROVED) {
+        throw new ApiError(409, 'PHONE_REQUEST_ALREADY_APPROVED', 'Phone access has already been approved for this chat.');
+    }
+
+    const requestMessage = payload.message?.trim() || 'Phone number request';
+    const message = await prisma.$transaction(async (tx) => {
+        await tx.contactAccessRequest.upsert({
+            where: { threadId },
+            update: {
+                listingId: thread.listingId,
+                requesterUserId: userId,
+                sellerUserId: thread.sellerId,
+                status: ContactRequestStatus.PENDING,
+                requestedMessage: requestMessage,
+                phoneApproved: false,
+                whatsappApproved: false,
+                respondedAt: null,
+            },
+            create: {
+                threadId,
+                listingId: thread.listingId,
+                requesterUserId: userId,
+                sellerUserId: thread.sellerId,
+                status: ContactRequestStatus.PENDING,
+                requestedMessage: requestMessage,
+            },
+        });
+
+        const createdMessage = await tx.chatMessage.create({
+            data: {
+                threadId,
+                senderId: userId,
+                type: MessageType.PHONE_REQUEST,
+                content: requestMessage,
+            },
+            select: {
+                id: true,
+                threadId: true,
+                senderId: true,
+                type: true,
+                content: true,
+                imageUrl: true,
+                isRead: true,
+                readAt: true,
+                createdAt: true,
+            },
+        });
+
+        await tx.chatThread.update({
+            where: { id: threadId },
+            data: { lastMessageAt: createdMessage.createdAt },
+        });
+
+        return createdMessage;
+    });
+
+    domainEventBus.publish('PHONE_REQUESTED', {
+        threadId,
+        requesterUserId: userId,
+        recipientUserIds: [thread.sellerId],
+    });
+
+    return serializeMessage(message);
+}
+
+export async function getPhoneRequestStateInThread(
+    userId: number,
+    threadId: number,
+): Promise<ContactRequestStateDto> {
+    await ensureThreadParticipant(threadId, userId);
+
+    const request = await prisma.contactAccessRequest.findUnique({
+        where: { threadId },
+        select: {
             threadId: true,
-            senderId: true,
-            type: true,
-            content: true,
-            imageUrl: true,
-            isRead: true,
-            readAt: true,
+            status: true,
+            requesterUserId: true,
+            sellerUserId: true,
+            phoneApproved: true,
+            whatsappApproved: true,
+            requestedMessage: true,
+            respondedAt: true,
             createdAt: true,
         },
     });
 
-    await prisma.chatThread.update({
+    return serializeContactRequestState(request, threadId);
+}
+
+export async function respondToPhoneRequestInThread(
+    userId: number,
+    threadId: number,
+    payload: { action: 'approve' | 'reject' },
+): Promise<{ request: ContactRequestStateDto; message: ChatMessageDto }> {
+    const thread = await prisma.chatThread.findUnique({
         where: { id: threadId },
-        data: { lastMessageAt: message.createdAt },
+        select: {
+            id: true,
+            listingId: true,
+            buyerId: true,
+            sellerId: true,
+            listing: {
+                select: {
+                    phoneVisibility: true,
+                    whatsappVisibility: true,
+                },
+            },
+        },
     });
 
-    return serializeMessage(message);
+    if (!thread) {
+        throw new ApiError(404, 'THREAD_NOT_FOUND', 'Thread not found.');
+    }
+
+    if (thread.buyerId !== userId && thread.sellerId !== userId) {
+        throw new ApiError(403, 'FORBIDDEN', 'You are not allowed to access this thread.');
+    }
+
+    if (thread.sellerId !== userId) {
+        throw new ApiError(403, 'ONLY_SELLER_CAN_RESPOND_PHONE_REQUEST', 'Only the seller can respond to a phone request.');
+    }
+
+    const existingRequest = await prisma.contactAccessRequest.findUnique({
+        where: { threadId },
+        select: {
+            threadId: true,
+            status: true,
+            requesterUserId: true,
+            sellerUserId: true,
+            phoneApproved: true,
+            whatsappApproved: true,
+            requestedMessage: true,
+            respondedAt: true,
+            createdAt: true,
+        },
+    });
+
+    if (!existingRequest) {
+        throw new ApiError(404, 'PHONE_REQUEST_NOT_FOUND', 'No phone request was found for this chat.');
+    }
+
+    if (existingRequest.status !== ContactRequestStatus.PENDING) {
+        throw new ApiError(409, 'PHONE_REQUEST_NOT_PENDING', 'This phone request is no longer pending.');
+    }
+
+    const approvedPhone = payload.action === 'approve' && thread.listing.phoneVisibility === ContactVisibility.APPROVAL;
+    const approvedWhatsapp = payload.action === 'approve' && thread.listing.whatsappVisibility === ContactVisibility.APPROVAL;
+    const systemMessageText =
+        payload.action === 'approve'
+            ? 'Seller approved contact request.'
+            : 'Seller rejected contact request.';
+
+    const result = await prisma.$transaction(async (tx) => {
+        const updatedRequest = await tx.contactAccessRequest.update({
+            where: { threadId },
+            data: {
+                status: payload.action === 'approve' ? ContactRequestStatus.APPROVED : ContactRequestStatus.REJECTED,
+                phoneApproved: approvedPhone,
+                whatsappApproved: approvedWhatsapp,
+                respondedAt: new Date(),
+            },
+            select: {
+                threadId: true,
+                status: true,
+                requesterUserId: true,
+                sellerUserId: true,
+                phoneApproved: true,
+                whatsappApproved: true,
+                requestedMessage: true,
+                respondedAt: true,
+                createdAt: true,
+            },
+        });
+
+        const responseMessage = await tx.chatMessage.create({
+            data: {
+                threadId,
+                senderId: userId,
+                type: MessageType.SYSTEM,
+                content: systemMessageText,
+            },
+            select: {
+                id: true,
+                threadId: true,
+                senderId: true,
+                type: true,
+                content: true,
+                imageUrl: true,
+                isRead: true,
+                readAt: true,
+                createdAt: true,
+            },
+        });
+
+        await tx.chatThread.update({
+            where: { id: threadId },
+            data: { lastMessageAt: responseMessage.createdAt },
+        });
+
+        return {
+            request: updatedRequest,
+            message: responseMessage,
+        };
+    });
+
+    return {
+        request: serializeContactRequestState(result.request, threadId),
+        message: serializeMessage(result.message),
+    };
 }
 
 export async function createThreadOffer(
@@ -545,6 +947,11 @@ export async function createThreadOffer(
             counterAmount: true,
             createdAt: true,
             respondedAt: true,
+            listing: {
+                select: {
+                    currency: true,
+                },
+            },
         },
     });
 
@@ -568,6 +975,18 @@ export async function createThreadOffer(
         where: { id: threadId },
         data: { lastMessageAt: new Date() },
     });
+
+    domainEventBus.publish('OFFER_SENT', {
+        offerId: offer.id,
+        threadId,
+        listingId: thread.listingId,
+        senderId: userId,
+        recipientUserIds: [thread.buyerId, thread.sellerId].filter((participantId) => participantId !== userId),
+        amount: offer.amount,
+        currency: offer.listing?.currency ?? null,
+    });
+
+    await incrementStoreAnalyticsMetric(thread.sellerId, 'offersReceived');
 
     return serializeOffer(offer);
 }
@@ -666,6 +1085,16 @@ export async function respondToOffer(
         data: {
             lastMessageAt: new Date(),
         },
+    });
+
+    domainEventBus.publish('OFFER_RESPONDED', {
+        offerId: updatedOffer.id,
+        threadId: updatedOffer.threadId,
+        listingId: updatedOffer.listingId,
+        actorUserId: userId,
+        recipientUserIds: [offer.senderId],
+        status: updatedOffer.status,
+        counterAmount: updatedOffer.counterAmount,
     });
 
     return serializeOffer(updatedOffer);

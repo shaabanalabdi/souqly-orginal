@@ -8,34 +8,48 @@ $color-primary-light: #3150a6;
 $color-primary-dark: #172d6a;
 $color-primary-bg: #e6ecff;
 
-$color-secondary: #F59E0B;
-$color-secondary-light: #fbbf24;
-$color-secondary-dark: #d97706;
-
 $color-accent: #F59E0B;
-$color-accent-light: #fcd34d;
+$color-accent-light: #fbbf24;
 $color-accent-dark: #d97706;
 
-// Neutrals
+// Backward-compatible alias used by existing pages.
+$color-secondary: $color-accent;
+$color-secondary-light: $color-accent-light;
+$color-secondary-dark: $color-accent-dark;
+
+// Neutral scale (50-900)
+$color-neutral-50: #F8FAFC;
+$color-neutral-100: #F1F5F9;
+$color-neutral-200: #E2E8F0;
+$color-neutral-300: #CBD5E1;
+$color-neutral-400: #94A3B8;
+$color-neutral-500: #64748B;
+$color-neutral-600: #475569;
+$color-neutral-700: #334155;
+$color-neutral-800: #1E293B;
+$color-neutral-900: #0F172A;
+
+// Semantic neutrals
 $color-white: #FFFFFF;
 $color-black: #000000;
-$color-bg: #F9FAFB;
+$color-bg: $color-neutral-50;
 $color-bg-dark: #1A1A2E;
 $color-surface: #FFFFFF;
 $color-surface-dark: #242444;
-$color-text: #111827;
-$color-text-secondary: #6B7280;
-$color-text-light: #94A3B8;
-$color-text-dark-mode: #E2E8F0;
-$color-border: #E2E8F0;
-$color-border-light: #F1F5F9;
-$color-divider: #F1F5F9;
+$color-text: $color-neutral-900;
+$color-text-secondary: $color-neutral-600;
+$color-text-light: $color-neutral-400;
+$color-text-dark-mode: $color-neutral-200;
+$color-border: $color-neutral-200;
+$color-border-light: $color-neutral-100;
+$color-divider: $color-neutral-100;
 
 // Status
-$color-success: #10B981;
-$color-warning: #F59E0B;
-$color-danger: #EF4444;
-$color-info: #3B82F6;
+$color-success: #16A34A;
+$color-warning: #D97706;
+$color-danger: #DC2626;
+$color-error: $color-danger;
+$color-info: #0EA5E9;
 
 // Trust levels
 $color-trust-new: #94A3B8;

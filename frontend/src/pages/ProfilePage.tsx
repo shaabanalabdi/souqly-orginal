@@ -3,6 +3,7 @@ import { ListingCard } from '../components/ListingCard';
 import { TrustBadge } from '../components/TrustBadge';
 import { TrustScore } from '../components/TrustScore';
 import { EmptyState } from '../components/EmptyState';
+import { ErrorStatePanel, Tabs } from '../components/ui';
 import { preferencesService } from '../services/preferences.service';
 import { asHttpError } from '../services/http';
 import { useAuthStore } from '../store/authStore';
@@ -105,25 +106,23 @@ export function ProfilePage() {
       </article>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft">
-        <div className="mb-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('listings')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              tab === 'listings' ? 'bg-primary text-white' : 'border border-slate-200 text-ink hover:bg-slate-50'
-            }`}
-          >
-            {pick('المفضلة', 'Favorites')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('reviews')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              tab === 'reviews' ? 'bg-primary text-white' : 'border border-slate-200 text-ink hover:bg-slate-50'
-            }`}
-          >
-            {pick('التقييمات', 'Reviews')}
-          </button>
+        <div className="mb-4">
+          <Tabs
+            activeKey={tab}
+            onChange={(key) => setTab(key as ProfileTab)}
+            items={[
+              {
+                key: 'listings',
+                label: pick('المفضلة', 'Favorites'),
+                icon: <span className="material-symbols-outlined text-base">favorite</span>,
+              },
+              {
+                key: 'reviews',
+                label: pick('التقييمات', 'Reviews'),
+                icon: <span className="material-symbols-outlined text-base">reviews</span>,
+              },
+            ]}
+          />
         </div>
 
         {tab === 'listings' ? (
@@ -165,7 +164,12 @@ export function ProfilePage() {
             ))}
           </div>
         )}
-        {errorMessage ? <p className="mt-3 text-sm text-amber-700">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <ErrorStatePanel
+            title={pick('تعذر تحميل بيانات الملف', 'Failed to load profile data')}
+            message={errorMessage}
+          />
+        ) : null}
       </section>
     </section>
   );

@@ -190,6 +190,51 @@ describe('Deal routes', () => {
         expect(response.body.meta.total).toBe(1);
     });
 
+    it('GET /api/v1/deals/:id returns deal details for participant', async () => {
+        const accessToken = signAccessToken({ userId: 41, role: 'USER', trustTier: 'NEW' });
+
+        jest.spyOn(prisma.deal, 'findUnique').mockResolvedValue({
+            id: 300,
+            listingId: 200,
+            buyerId: 41,
+            sellerId: 99,
+            finalPrice: 1000,
+            quantity: 1,
+            currency: 'USD',
+            status: 'PENDING',
+            buyerConfirmed: false,
+            sellerConfirmed: false,
+            escrowStatus: 'NONE',
+            escrowAmount: null,
+            escrowCurrency: null,
+            escrowProviderRef: null,
+            escrowHeldAt: null,
+            escrowReleasedAt: null,
+            escrowRefundedAt: null,
+            meetingPlace: null,
+            meetingLat: null,
+            meetingLng: null,
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            completedAt: null,
+            dispute: null,
+            listing: {
+                titleAr: 'عنوان',
+                titleEn: 'Title',
+                images: [{ urlThumb: 'https://img.example/thumb.jpg' }],
+            },
+        } as never);
+
+        const response = await request(app)
+            .get('/api/v1/deals/300?lang=en')
+            .set('Authorization', `Bearer ${accessToken}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.data.id).toBe(300);
+        expect(response.body.data.listing.title).toBe('Title');
+        expect(response.body.data.dispute).toBeNull();
+    });
+
     it('PATCH /api/v1/deals/:id/escrow/hold holds escrow for buyer', async () => {
         const accessToken = signAccessToken({ userId: 41, role: 'USER', trustTier: 'VERIFIED' });
 
@@ -245,6 +290,7 @@ describe('Deal routes', () => {
         const response = await request(app)
             .patch('/api/v1/deals/301/escrow/hold')
             .set('Authorization', `Bearer ${accessToken}`)
+            .set('x-idempotency-key', 'deal-301-hold')
             .send({});
 
         expect(response.status).toBe(200);
@@ -306,7 +352,8 @@ describe('Deal routes', () => {
 
         const response = await request(app)
             .patch('/api/v1/deals/302/escrow/release')
-            .set('Authorization', `Bearer ${accessToken}`);
+            .set('Authorization', `Bearer ${accessToken}`)
+            .set('x-idempotency-key', 'deal-302-release');
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
@@ -367,7 +414,8 @@ describe('Deal routes', () => {
 
         const response = await request(app)
             .patch('/api/v1/deals/303/escrow/refund')
-            .set('Authorization', `Bearer ${accessToken}`);
+            .set('Authorization', `Bearer ${accessToken}`)
+            .set('x-idempotency-key', 'deal-303-refund');
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
